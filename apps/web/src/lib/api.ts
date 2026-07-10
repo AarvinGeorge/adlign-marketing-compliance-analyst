@@ -1,8 +1,9 @@
-// meta: typed fetch client for the M4 FastAPI service (01_spec §6). Base URL
-// from NEXT_PUBLIC_API_URL (default http://localhost:8000). Response types
-// mirror apps/api/src/shiboleth/api/routes/{products,flags,runs}.py exactly;
+// meta: typed fetch client for the FastAPI service (01_spec §6). Base URL from
+// NEXT_PUBLIC_API_URL (default http://localhost:8000). Response types mirror
+// apps/api/src/shiboleth/api/routes/{products,flags,runs,metrics}.py exactly;
 // ApiError carries the HTTP status so callers can branch on 409 (illegal
-// lifecycle transition). No presentation logic here; that lives in data.ts.
+// lifecycle transition / duplicate product name). No presentation logic here;
+// that lives in data.ts.
 
 import type { IntersectionTag, PropertyKind } from "@/lib/types";
 
@@ -45,7 +46,10 @@ export interface ApiScores {
   verified: number | null;
   per_property?: Record<string, number>;
   needs_review_count?: number;
-  outcome_rows?: unknown[]; // present on GET /products only; never used by UI
+  // live runs carry these; property_status maps propertyId -> fetched |
+  // needs_input | skipped, config carries the crawl cap for progress.
+  property_status?: Record<string, string>;
+  config?: { depth?: number; cap?: number };
 }
 
 export interface ApiProductListItem {
@@ -53,7 +57,26 @@ export interface ApiProductListItem {
   name: string;
   status: string;
   scores: ApiScores | null;
+  run_id: string | null;
   last_run_status: string | null;
+}
+
+// GET /metrics: each hero KPI. value=null is an honest empty state (render
+// the sublabel, never a fabricated number). trend is present only on the
+// portfolio score and drives its sparkline (empty array = no sparkline).
+export interface ApiMetric {
+  value: string | number | null;
+  sublabel: string;
+  intent: string;
+  trend?: number[];
+}
+
+export interface ApiMetrics {
+  portfolio_score: ApiMetric;
+  open_violations: ApiMetric;
+  triage: ApiMetric;
+  coverage: ApiMetric;
+  caught: ApiMetric;
 }
 
 export interface ApiVerdicts {
@@ -137,9 +160,52 @@ export function getRunEventsApi(runId: string): Promise<ApiEvent[]> {
   return fetchJson<ApiEvent[]>(`/runs/${runId}/events.json`);
 }
 
-export function postCheck(productId: string): Promise<{ run_id: string }> {
-  return fetchJson<{ run_id: string }>("/checks", {
+export function getMetricsApi(): Promise<ApiMetrics> {
+  return fetchJson<ApiMetrics>("/metrics");
+}
+
+export interface NewPropertyInput {
+  kind: PropertyKind;
+  url_or_handle: string;
+  config?: Record<string, unknown>;
+}
+
+export function postCreateProduct(body: {
+  name: string;
+  properties: NewPropertyInput[];
+}): Promise<{ id: string; name: string }> {
+  return fetchJson<{ id: string; name: string }>("/products", {
     method: "POST",
-    body: JSON.stringify({ product_id: productId, mode: "corpus" }),
+    body: JSON.stringify(body),
   });
+}
+
+export function postCheck(
+  productId: string,
+  mode: "live" | "corpus" = "live"
+): Promise<{ run_id: string; status?: string }> {
+  return fetchJson<{ run_id: string; status?: string }>("/checks", {
+    method: "POST",
+    body: JSON.stringify({ product_id: productId, mode }),
+  });
+}
+
+export function postPasteContent(
+  runId: string,
+  body: { property_id: string; text: string }
+): Promise<{ run_id: string; status: string }> {
+  return fetchJson<{ run_id: string; status: string }>(
+    `/runs/${runId}/paste-content`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
+export function postSkipProperty(
+  runId: string,
+  body: { property_id: string; text?: string }
+): Promise<{ run_id: string; status: string }> {
+  return fetchJson<{ run_id: string; status: string }>(
+    `/runs/${runId}/skip-property`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
 }
