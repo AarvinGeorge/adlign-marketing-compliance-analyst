@@ -22,6 +22,7 @@ dependencies = [
     "langchain-groq>=0.2",
     "sse-starlette>=2.1",
     "langchain-anthropic>=1.4.8",
+    "crawl4ai>=0.9.1",
 ]
 
 [dependency-groups]

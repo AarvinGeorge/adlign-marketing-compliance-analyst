@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
@@ -32,23 +32,76 @@ class CheckRequest(BaseModel):
     mode: str = "corpus"  # live arrives at M6
 
 
-@router.post("/checks")
-async def start_check(body: CheckRequest, request: Request) -> dict:
-    if body.mode != "corpus":
-        raise HTTPException(422, "live mode lands at M6; use mode=corpus")
-    app = request.app
-    settings = app.state.settings
-
+def _pipeline_deps(settings):
     from shiboleth.evals.harnesses.e3 import PacedCachedInvoke
-    from shiboleth.pipeline.corpus_run import run_corpus
     from shiboleth.pipeline.nodes.cluster import groq_labeler
 
-    invoke = PacedCachedInvoke(settings.model_for("check"))
-    labeler = groq_labeler(settings.model_for("cluster_label"))
+    return (PacedCachedInvoke(settings.model_for("check")),
+            groq_labeler(settings.model_for("cluster_label")))
+
+
+@router.post("/checks")
+async def start_check(body: CheckRequest, request: Request) -> dict:
+    app = request.app
+    invoke, labeler = _pipeline_deps(app.state.settings)
+
+    if body.mode == "corpus":
+        from shiboleth.pipeline.corpus_run import run_corpus
+
+        async with app.state.session_factory() as session:
+            run_id = await run_corpus(session, invoke, labeler,
+                                      product_id=body.product_id)
+        return {"run_id": run_id}
+
+    # live (07 §3 S1): the run row is created + committed HERE so the caller
+    # gets its id immediately; one in-process async task then owns ingest.
+    # The barrier may park it as awaiting_input; paste/skip endpoints resume.
+    from shiboleth.pipeline.live_run import create_live_run, start_live_run
+
     async with app.state.session_factory() as session:
-        run_id = await run_corpus(session, invoke, labeler,
-                                  product_id=body.product_id)
-    return {"run_id": run_id}
+        run_id = await create_live_run(session, body.product_id)
+
+    async def task():
+        async with app.state.session_factory() as session:
+            await start_live_run(session, invoke, labeler,
+                                 product_id=body.product_id, run_id=run_id)
+
+    run_task = asyncio.create_task(task())
+    app.state.live_tasks = getattr(app.state, "live_tasks", set())
+    app.state.live_tasks.add(run_task)
+    run_task.add_done_callback(app.state.live_tasks.discard)
+    return {"run_id": run_id, "status": "started"}
+
+
+class PasteRequest(BaseModel):
+    property_id: str
+    text: str
+
+
+@router.post("/runs/{run_id}/paste-content")
+async def paste_content(run_id: str, body: PasteRequest, request: Request) -> dict:
+    app = request.app
+    invoke, labeler = _pipeline_deps(app.state.settings)
+    from shiboleth.pipeline.live_run import register_paste, resume_checking
+
+    async with app.state.session_factory() as session:
+        await register_paste(session, run_id, body.property_id, body.text)
+        await resume_checking(session, invoke, labeler, run_id)
+        run = await session.get(Run, run_id)
+        return {"run_id": run_id, "status": run.status}
+
+
+@router.post("/runs/{run_id}/skip-property")
+async def skip_property(run_id: str, body: PasteRequest, request: Request) -> dict:
+    app = request.app
+    invoke, labeler = _pipeline_deps(app.state.settings)
+    from shiboleth.pipeline.live_run import register_skip, resume_checking
+
+    async with app.state.session_factory() as session:
+        await register_skip(session, run_id, body.property_id)
+        await resume_checking(session, invoke, labeler, run_id)
+        run = await session.get(Run, run_id)
+        return {"run_id": run_id, "status": run.status}
 
 
 @router.get("/runs/{run_id}/events")
