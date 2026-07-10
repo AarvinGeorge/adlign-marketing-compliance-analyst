@@ -109,7 +109,11 @@ export default function ProductDetailPage({
       ) : null}
 
       {views.length === 0 ? (
-        <NoFlags checking={summary.status === "checking"} />
+        <NoFlags
+          checking={
+            summary.status === "running" || summary.status === "awaiting_input"
+          }
+        />
       ) : (
         <>
           <div className="mb-3.5 flex items-center gap-3">
