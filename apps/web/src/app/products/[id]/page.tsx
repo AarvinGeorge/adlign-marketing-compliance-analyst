@@ -114,7 +114,8 @@ export default function ProductDetailPage({
         <>
           <div className="mb-3.5 flex items-center gap-3">
             <span className="flex-1 text-[13px] font-semibold">
-              {views.length} flags in {clusters.length} clusters
+              {views.length} flags in{" "}
+              {clusters.filter((c) => c.id !== "unclustered").length} clusters
             </span>
             <div className="flex rounded-md bg-muted p-[3px]">
               {(["cluster", "property"] as const).map((g) => (

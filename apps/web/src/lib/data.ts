@@ -185,7 +185,7 @@ function toProductSummary(
     (f) => (lifecycles[f.id]?.state ?? f.state) === "open"
   ).length;
   const clusterCount = new Set(
-    flags.map((f) => f.cluster_id ?? "unclustered")
+    flags.filter((f) => f.cluster_id !== null).map((f) => f.cluster_id)
   ).size;
   const verified = item.scores?.verified ?? null;
   return {
