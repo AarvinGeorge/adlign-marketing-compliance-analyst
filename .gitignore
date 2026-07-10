@@ -1,0 +1,28 @@
+# Secrets and machine-local config
+.env
+.env.*
+!.env.example
+
+# Agent context (project norm: code/CLAUDE.md is gitignored)
+CLAUDE.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+
+# Playwright / crawl4ai browser caches
+ms-playwright/
+.crawl4ai/
+
+# OS
+.DS_Store
