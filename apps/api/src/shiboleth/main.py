@@ -46,11 +46,23 @@ async def lifespan(app: FastAPI):
     propagate_env(settings)
     logger.info("Shiboleth env verified:\n%s", settings.masked_echo())
     app.state.settings = settings
+
+    from shiboleth.db.engine import get_engine, session_factory
+
+    url = getattr(app.state, "database_url_override", None) or settings.database_url
+    engine = get_engine(url)
+    app.state.session_factory = session_factory(engine)
     yield
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Shiboleth API", version="0.1.0", lifespan=lifespan)
+
+    from shiboleth.api.routes.flags import router as flags_router
+    from shiboleth.api.routes.products import router as products_router
+
+    app.include_router(products_router)
+    app.include_router(flags_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

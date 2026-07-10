@@ -218,9 +218,11 @@ def production_invoke(model_string: str) -> Callable[[str], CheckerVerdict]:
     """Bind the checker schema to a chat model (init_chat_model string)."""
     from langchain.chat_models import init_chat_model
 
-    model = init_chat_model(model_string, temperature=0).with_structured_output(
-        CheckerVerdict
-    )
+    # timeout is load-bearing: without it one dead connection hangs a whole
+    # corpus run (E3 iter-2 postmortem, 2026-07-10)
+    model = init_chat_model(
+        model_string, temperature=0, timeout=90, max_retries=2
+    ).with_structured_output(CheckerVerdict)
 
     def invoke(prompt: str) -> CheckerVerdict:
         return model.invoke(prompt)

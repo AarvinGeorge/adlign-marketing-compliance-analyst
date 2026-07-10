@@ -103,9 +103,10 @@ async def run_corpus(session: AsyncSession, invoke, labeler,
     await _emit(session, run.id, "node_finished", "cluster",
                 {"clusters": len(clusters)})
 
-    # N7: scores
+    # N7: scores — outcome rows persisted alongside so disposition recompute
+    # replays the SAME formula over the SAME rows (no derivation tricks)
     scores = outcomes_to_scores(score_rows, dismissed_ids=set())
-    run.scores = scores
+    run.scores = {**scores, "outcome_rows": score_rows}
     run.status = "completed"
     run.finished_at = datetime.now(UTC)
     await _emit(session, run.id, "scores_updated", "score", scores)

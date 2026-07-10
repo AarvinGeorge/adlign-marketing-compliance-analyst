@@ -82,7 +82,7 @@ class PacedCachedInvoke:
         elapsed = time.monotonic() - self._window_start
         if elapsed > 60:
             self._window_start, self._window_tokens = time.monotonic(), 0
-        elif self._window_tokens + est_tokens > 10_000:
+        elif self._window_tokens + est_tokens > 8_000:
             time.sleep(60 - elapsed)
             self._window_start, self._window_tokens = time.monotonic(), 0
         self._window_tokens += est_tokens
@@ -96,16 +96,21 @@ class PacedCachedInvoke:
             from shiboleth.pipeline.nodes.check import production_invoke
 
             self._live = production_invoke(self.model_string)
-        self._pace(len(prompt) // 4 + 600)
-        delay = 5.0
-        for attempt in range(6):
+        # conservative estimate: markdown tokenizes ~3 chars/token, plus
+        # schema + completion overhead (iter-1 postmortem: len//4 + 600
+        # undercounted -> TPM overspend -> 429 streak outlasted 6 retries)
+        self._pace(len(prompt) // 3 + 1200)
+        delay = 20.0
+        for attempt in range(10):
             try:
                 verdict = self._live(prompt)
                 break
             except Exception as exc:  # 429s surface as ChatGroq errors
                 if "429" in str(exc) or "rate" in str(exc).lower():
                     time.sleep(delay)
-                    delay = min(delay * 2, 120)
+                    delay = min(delay * 1.5, 90)
+                    # a 429 means the window is spent: reset local budget
+                    self._window_start, self._window_tokens = time.monotonic(), 8000
                     continue
                 raise
         else:
