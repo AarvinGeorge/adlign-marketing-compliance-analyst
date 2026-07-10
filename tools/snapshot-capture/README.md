@@ -62,6 +62,12 @@ production ingestion service never emits it. It survives only when a legacy
 page's crawl4ai refetch **degrades** (comes back thin/failed) — we keep the
 verified old body rather than discard it.
 
+> **Final corpus note (2026-07-09):** the corpus is frozen at 54 pages, all
+> captured by crawl4ai (`content_sha256` = sha256 of the whitespace-stripped
+> body). `fetcher: webfetch` never occurs in the final corpus; it survives in
+> this doc only as the historical legacy value. This tool is COMPLETE and
+> FROZEN: bugfix-only on explicit request.
+
 ### Hash rule (determinism)
 
 `content_sha256` = `sha256(body.strip())` over the body **after** the closing
