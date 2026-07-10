@@ -44,17 +44,26 @@ async def run_corpus(session: AsyncSession, invoke, labeler,
     await session.flush()
     await _emit(session, run.id, "run_started", "graph", {"mode": "corpus"})
 
-    # materials: one per snapshot, hash-bound (corpus loader verifies)
+    # materials: content-addressed cache/dedup (04 §6g refinement 1) — reuse
+    # the stored material when its hash exists, insert only when new
+    from sqlalchemy import select
+
     snapshots = load_corpus(GROUND_TRUTH_DIR / "snapshots")
     materials: dict[str, Material] = {}
     for doc in snapshots:
-        material = Material(property_id="tt-website", ref=doc.url, kind="page",
-                            content_hash=doc.content_hash, extracted_text=doc.body,
-                            raw={"page_id": doc.page_id, "source": doc.source})
-        session.add(material)
-        materials[doc.page_id] = material
+        existing = (await session.execute(
+            select(Material).where(Material.content_hash == doc.content_hash)
+        )).scalar_one_or_none()
+        cache_hit = existing is not None
+        if existing is None:
+            existing = Material(property_id="tt-website", ref=doc.url, kind="page",
+                                content_hash=doc.content_hash,
+                                extracted_text=doc.body,
+                                raw={"page_id": doc.page_id, "source": doc.source})
+            session.add(existing)
+        materials[doc.page_id] = existing
         await _emit(session, run.id, "material_fetched", "ingest",
-                    {"ref": doc.url, "cache_hit": True, "corpus": True})
+                    {"ref": doc.url, "cache_hit": cache_hit, "corpus": True})
     await session.flush()
 
     outcomes = corpus_outcomes(invoke)  # cache makes this cheap post-E3

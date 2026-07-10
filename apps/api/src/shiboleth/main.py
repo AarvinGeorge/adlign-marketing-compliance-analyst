@@ -58,6 +58,15 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="Shiboleth API", version="0.1.0", lifespan=lifespan)
 
+    from fastapi.middleware.cors import CORSMiddleware
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000"],  # dev web app (M5 integration)
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     from shiboleth.api.routes.flags import router as flags_router
     from shiboleth.api.routes.products import router as products_router
     from shiboleth.api.routes.runs import router as runs_router
