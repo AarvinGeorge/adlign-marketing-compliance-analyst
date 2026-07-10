@@ -28,8 +28,11 @@ async def list_products(request: Request) -> list[dict]:
                 select(Run).where(Run.product_id == p.id)
                 .order_by(desc(Run.started_at)).limit(1)
             )).scalar_one_or_none()
+            scores = latest.scores if latest else None
+            if scores:  # outcome_rows is recompute bookkeeping, not payload
+                scores = {k: v for k, v in scores.items() if k != "outcome_rows"}
             out.append({"id": p.id, "name": p.name, "status": p.status,
-                        "scores": latest.scores if latest else None,
+                        "scores": scores, "run_id": latest.id if latest else None,
                         "last_run_status": latest.status if latest else None})
         return out
 
@@ -76,6 +79,7 @@ async def product_detail(product_id: str, request: Request) -> dict:
         return {
             "product": {"id": product.id, "name": product.name,
                         "status": product.status},
+            "run_id": latest.id if latest else None,  # why-flagged chain source
             "properties": [
                 {"id": p.id, "kind": p.kind, "url_or_handle": p.url_or_handle,
                  "config": p.config} for p in properties

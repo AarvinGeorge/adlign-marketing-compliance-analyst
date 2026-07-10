@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shiboleth.db.models import Cluster, Event, Flag, Material, Run
+from shiboleth.db.models import Cluster, Event, Flag, Material, Run, new_id
 from shiboleth.db.seed import PRODUCT_ID, RULES
 from shiboleth.evals.harnesses.e3 import GROUND_TRUTH_DIR, corpus_outcomes
 from shiboleth.pipeline.nodes.cluster import cluster_flags
@@ -79,7 +79,10 @@ async def run_corpus(session: AsyncSession, invoke, labeler,
                            "property_id": "tt-website", "flag_id": None})
         if outcome is None or status not in ("flag", "needs_review"):
             continue
+        # explicit id: the column default fires at flush, and score_rows needs
+        # the id NOW for the verified-recompute linkage (Lane B blocker 1)
         flag = Flag(
+            id=new_id(),
             run_id=run.id, material_id=materials[page_id].id,
             check_id=f"{rule_id}-REQ", axis_a=bool(outcome.axis_a),
             axis_b=outcome.axis_b, intersection_tag=outcome.intersection_tag or "na",
