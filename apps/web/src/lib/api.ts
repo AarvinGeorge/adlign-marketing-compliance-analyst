@@ -50,6 +50,9 @@ export interface ApiScores {
   // needs_input | skipped, config carries the crawl cap for progress.
   property_status?: Record<string, string>;
   config?: { depth?: number; cap?: number };
+  // coverage.properties maps propertyId -> fetched | skipped for the run;
+  // drives the card's channel chips (what was actually analyzed).
+  coverage?: { properties?: Record<string, string> };
 }
 
 export interface ApiProductListItem {

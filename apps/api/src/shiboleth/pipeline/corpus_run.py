@@ -121,7 +121,12 @@ async def run_corpus(session: AsyncSession, invoke, labeler,
     # N7: scores — outcome rows persisted alongside so disposition recompute
     # replays the SAME formula over the SAME rows (no derivation tricks)
     scores = outcomes_to_scores(score_rows, dismissed_ids=set())
-    run.scores = {**scores, "outcome_rows": score_rows}
+    # coverage: corpus is 54 website pages, no social — record it so the
+    # dashboard card shows only the channel actually analyzed (parity with
+    # live runs, which store fetched/skipped per property)
+    coverage = {"properties": {"tt-website": "fetched"},
+                "materials_checked": len(materials)}
+    run.scores = {**scores, "outcome_rows": score_rows, "coverage": coverage}
     run.status = "completed"
     run.finished_at = datetime.now(UTC)
     await _emit(session, run.id, "scores_updated", "score", scores)

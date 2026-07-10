@@ -320,10 +320,21 @@ function buildSummary(
     verifiedScore: item.scores?.verified ?? null,
     openFlagCount: openCount,
     note,
-    coverage: (detail?.properties ?? []).map((p) => ({
-      kind: p.kind,
-      label: shortHandle(p.kind, p.url_or_handle),
-    })),
+    // chips reflect what the LATEST RUN actually covered (fetched), not the
+    // product's static channel config: a website-only run (socials skipped)
+    // shows only the website chip. Fall back to all properties when a run has
+    // no coverage map (legacy runs).
+    coverage: (() => {
+      const covered = detail?.scores?.coverage?.properties;
+      const props = detail?.properties ?? [];
+      const shown = covered
+        ? props.filter((p) => covered[p.id] === "fetched")
+        : props;
+      return shown.map((p) => ({
+        kind: p.kind,
+        label: shortHandle(p.kind, p.url_or_handle),
+      }));
+    })(),
     lastChecked:
       uiStatus === "flagged" || uiStatus === "clear" ? "Latest run" : null,
     runId: item.run_id,
