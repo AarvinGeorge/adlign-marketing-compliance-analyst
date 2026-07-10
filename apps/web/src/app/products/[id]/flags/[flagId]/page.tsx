@@ -17,6 +17,7 @@ import { DispositionPanel } from "@/components/surfaces/disposition-panel";
 import { WhyFlagged } from "@/components/surfaces/why-flagged";
 import { getFlagView, getProduct } from "@/lib/data";
 import { useFlagStore } from "@/lib/flag-store";
+import { RuleText } from "@/lib/render-rule-text";
 
 export default function FlagDetailPage({
   params,
@@ -90,6 +91,12 @@ export default function FlagDetailPage({
                 {rule.id} · check {check.id}
               </span>
             </FactRow>
+            <div className="rounded-md border border-border/60 bg-surface px-3 py-2">
+              <RuleText
+                text={rule.verbatim_text}
+                className="font-mono text-[11px] leading-relaxed text-foreground/70"
+              />
+            </div>
             <FactRow label="Linked library entry">
               <span className="font-mono text-xs">
                 {check.library_entry_id ?? "none"}

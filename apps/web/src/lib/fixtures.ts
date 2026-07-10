@@ -89,14 +89,16 @@ export interface FlagMeta {
 }
 
 // ---------------------------------------------------------------------------
-// Scorecard: 4 rules VERBATIM from doc 05 §1 + decomposed checks + D-01
+// Scorecard: 4 rules VERBATIM from doc 05 §1 + decomposed checks + D-01.
+// R-01 keeps the source's markdown [text](url) link markup byte-for-byte;
+// rendering (links as anchors) happens ONLY via lib/render-rule-text.tsx.
 // ---------------------------------------------------------------------------
 
 export const rules: Rule[] = [
   {
     id: "R-01",
     verbatim_text:
-      "If Turbotax free is mentioned, the following must be disclosed right underneath ~37% of filers qualify. Simple Form 1040 returns only (no schedules, except for EITC, CTC, student loan interest, and Schedule 1-A).",
+      "If Turbotax free is mentioned, the following must be disclosed right underneath ~37% of filers qualify. [Simple Form 1040 returns only](https://turbotax.intuit.com/personal-taxes/online/free-edition.jsp#modals/simple-tax-returns-en) (no schedules, except for EITC, CTC, student loan interest, and Schedule 1-A).",
     severity: "High",
     position: 1,
   },
