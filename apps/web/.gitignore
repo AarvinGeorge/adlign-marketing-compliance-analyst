@@ -42,3 +42,9 @@ next-env.d.ts
 
 # lane-b progress screenshots (local artifacts, not for the repo)
 .progress/
+
+# playwright e2e artifacts + browsers
+e2e/.artifacts/
+e2e/.playwright-output/
+test-results/
+playwright-report/
