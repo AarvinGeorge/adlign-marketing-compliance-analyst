@@ -9,7 +9,7 @@ import { Area, AreaChart, Line, LineChart, YAxis } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 
 const chartConfig = {
-  v: { label: "Score", color: "#d4d4d4" },
+  v: { label: "Score", color: "var(--ds-border)" }, // token, not hex (audit)
 } satisfies ChartConfig;
 
 export function Sparkline({

@@ -106,8 +106,12 @@ export function FlagRow({
               >
                 Dismiss
               </Button>
+              {/* outline, not solid: DESIGN.md allows one solid-blue element
+                  per screen beyond the primary CTA (impeccable audit P1) */}
               <Button
+                variant="outline"
                 size="sm"
+                className="text-accent-foreground"
                 disabled={disposition.isPending}
                 onClick={() => setAssigning(true)}
               >
