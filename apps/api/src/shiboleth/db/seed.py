@@ -37,8 +37,8 @@ PRODUCT_ID = "turbotax-free"
 CHECKS: list[dict] = [
     {
         "id": "R-01-T", "rule_id": "R-01", "kind": "trigger",
-        "text": "Does the material mention TurboTax Free (the free product or free filing offer)?",
-        "evidence_criteria": "A mention of TurboTax Free / Free Edition / filing free with TurboTax; quote the mention verbatim.",
+        "text": "Does the material mention the advertised free tax-filing product or a free-filing offer (the product's Free edition, 'file free', '$0 to file')?",
+        "evidence_criteria": "A free-product or free-filing claim for the advertised tax product, under any brand name; quote the mention verbatim.",
         "library_entry_id": None,
     },
     {

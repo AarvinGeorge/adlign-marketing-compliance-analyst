@@ -33,7 +33,9 @@ REQUIRED_KEYS = ("DATABASE_URL", "LANGSMITH_API_KEY", "GOOGLE_API_KEY", "GROQ_AP
 # Pinned, never "-latest": the E3 loop and base condition need a stable model id.
 MODEL_STAGES: dict[str, tuple[str, str]] = {
     "extract": ("DEFAULT_MODEL_EXTRACT", "google_genai:gemini-3.5-flash"),
-    "check": ("DEFAULT_MODEL_CHECK", "google_genai:gemini-3.5-flash"),
+    # check: Groq (M2 gate evidence recorded on it; fast, generous free tier;
+    # Google's project-wide free quota exhausted mid-M2 — see decision log)
+    "check": ("DEFAULT_MODEL_CHECK", "groq:llama-3.3-70b-versatile"),
     "cluster_label": ("DEFAULT_MODEL_CLUSTER_LABEL", "groq:llama-3.3-70b-versatile"),
     "report": ("DEFAULT_MODEL_REPORT", "google_genai:gemini-3.5-flash"),
 }

@@ -1,0 +1,254 @@
+{
+ "0d0c15094bcb6c06f9f8b4c45ce735a66384ef0f6ca1e06e718f4ffd72042732": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "0% APR promotional financing on your advance until April 15",
+   "location": "extracted page text",
+   "reason": "The material states a rate of finance charge as 0% APR, which meets the requirement of stating the finance charge as an APR. The term 'APR' is explicitly used in the statement.",
+   "requirement_met": true,
+   "trigger_met": true
+  }
+ },
+ "12e07015a1c1e5b0fe29c83ca9e791522cf881e9b763964f68b581fccb2c0f4f": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "a $1,000 advance costs only a $45 finance charge",
+   "location": "extracted page text",
+   "reason": "The material states a finance charge of $45 for a $1,000 advance, which is a numeric rate describing the cost of credit. However, it does not express this rate as an APR. The trigger is met because a rate of finance charge is stated, but the requirement is not met because the finance charge is not stated as an APR.",
+   "requirement_met": false,
+   "trigger_met": true
+  }
+ },
+ "3d9358c4574fc63c010567f532e8944d69b93312a40309837a08f7f9b3029054": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "NeoSpend checking bonus: $100 when you keep a $2,500 minimum balance for 60 days. 0.50% Annual Percentage Yield (APY). No minimum to open. Bonus deposited within two statement cycles.",
+   "location": "entire material",
+   "reason": "The material clearly states the bonus, annual percentage yield, time requirement, minimum balance required to obtain the bonus, minimum balance to open the account, and when the bonus will be provided, thus satisfying all the requirements.",
+   "requirement_met": true,
+   "trigger_met": true
+  }
+ },
+ "4a4be7290f26bf2d0a794c406010b96713b9f4bf04c9d0364b260e63bb9ee2ca": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 0.8,
+   "evidence_quote": "Open NeoSave and earn a $150 bonus. 4.0% yield. Keep $5,000 in the account for 90 days.",
+   "location": "entire material",
+   "reason": "The material states a specific bonus of $150, triggering the rule. However, it does not clearly state the annual percentage yield using that term, and other required information such as the minimum balance to open the account is not mentioned. The material only mentions the yield as '4.0% yield' without using the term 'annual percentage yield'.",
+   "requirement_met": false,
+   "trigger_met": true
+  }
+ },
+ "52e0bc786fb9857fbe1ad5853be6572e1661e6f3c55b75c00cbc612b856183b5": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 0.9,
+   "evidence_quote": "Get a $200 bonus when you open a NeoSpend checking account this month!",
+   "location": "Main advertisement text",
+   "reason": "The advertisement states a specific bonus of $200, triggering the rule. However, it does not provide any of the required disclosures, such as annual percentage yield, time requirement, minimum balance, or when the bonus will be provided.",
+   "requirement_met": false,
+   "trigger_met": true
+  }
+ },
+ "55011312d95a6fd3bdea7eef2745ed57ee29dd769982d2e2fd138a89a70f284e": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "Millions file free every year with TaxCo Free Edition. ~37% of filers qualify. Simple Form 1040 returns only (no schedules, except for EITC, CTC, student loan interest, and Schedule 1-A).",
+   "location": "extracted page text",
+   "reason": "The material mentions a free edition, which triggers the rule. The required disclosure is present right underneath the free mention, satisfying the requirement.",
+   "requirement_met": true,
+   "trigger_met": true
+  }
+ },
+ "60654e05ed3c970a50d0ccac59514735fb7ee24520ef4fa72cab2385299a1c25": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "TaxCo Free: $0 federal, $0 state, $0 to file.",
+   "location": "First paragraph",
+   "reason": "The material mentions 'TaxCo Free' and '$0 to file', which triggers the rule. However, the required disclosure is not present right underneath the free mention. Instead, a vague statement 'Fine print: Some filers with simple returns may qualify for free filing; see terms.' is found twenty paragraphs later, which does not meet the requirement.",
+   "requirement_met": false,
+   "trigger_met": true
+  }
+ },
+ "62543ecca1b8a862467b9c335e0b803ef61b2d79e92c69bb516b619eedf8346f": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "",
+   "location": "Entire material",
+   "reason": "The material does not mention TurboTax Free, therefore the trigger is not met.",
+   "requirement_met": null,
+   "trigger_met": false
+  }
+ },
+ "6ad2dbc857a38e85ed9f9eab5d75ac80089b9d985e9a85a567291637ddc4afbb": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "File free with TaxCo Free Edition. ~37% of filers qualify. Simple Form 1040 returns only (no schedules, except for EITC, CTC, student loan interest, and Schedule 1-A).",
+   "location": "extracted page text",
+   "reason": "The material mentions 'File free with TaxCo Free Edition' which triggers the rule, and the required disclosure is present right underneath the free mention.",
+   "requirement_met": true,
+   "trigger_met": true
+  }
+ },
+ "7e54336521faf5d75edaa049b4da1335bf35998ea7d49d159ccca376a8370d40": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "File your taxes 100% free with TaxCo Free. No catches, everyone files free.",
+   "location": "First sentence of the material",
+   "reason": "The material mentions a free tax-filing product, but does not disclose the eligibility criteria right underneath. The mention of '100% free' triggers the rule, but the required disclosure is absent.",
+   "requirement_met": false,
+   "trigger_met": true
+  }
+ },
+ "863ef6de1d6e446ef9ebd49683e081f20e6a40b22c4ed3e7db2149d4c46d4f0c": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "Deposits are FDIC-insured up to $250,000 through Partner Trust Bank (Member FDIC)",
+   "location": "advertised product description",
+   "reason": "The product being advertised is a deposit product, and the FDIC insurance language matches the required formulation, stating the deposit product is FDIC-insured up to $250,000 through Partner Trust Bank.",
+   "requirement_met": true,
+   "trigger_met": true
+  }
+ },
+ "8b4a6c287329439a1497ea5af33a089930db187d38dc0883a20cb1c8f686cbaa": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "Earn a $150 bonus with NeoSave: 4.00% Annual Percentage Yield (APY). Maintain a $5,000 minimum balance for 90 days to obtain the bonus; $500 minimum to open the account; bonus credited within 30 days of qualifying.",
+   "location": "extracted page text",
+   "reason": "The advertisement clearly states the bonus and provides all required information, including the annual percentage yield, time requirement, minimum balance to obtain the bonus, minimum balance to open the account, and when the bonus will be provided.",
+   "requirement_met": true,
+   "trigger_met": true
+  }
+ },
+ "9f1d3560fb7d3d91f9ec2292ae04c9bf628a04000f0c79bb3a071239cabacba3": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 0.8,
+   "evidence_quote": "Your money is FDIC insured and always safe with us",
+   "location": "product description",
+   "reason": "The product being advertised is a checking account, which is a deposit product. However, the FDIC insurance language does not state the deposit product is FDIC-insured up to $250,000 through the named bank. The language only mentions that the money is FDIC insured, but it does not provide the required details.",
+   "requirement_met": false,
+   "trigger_met": true
+  }
+ },
+ "b2b9d1a617d56a17902dbf20cff45ac16272cab8a025ea3f346014ed6094ac4f": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "NeoSave high-yield savings",
+   "location": "product description",
+   "reason": "The product being advertised is a high-yield savings account, which is a type of deposit product. However, there is no mention of FDIC insurance language in the material.",
+   "requirement_met": false,
+   "trigger_met": true
+  }
+ },
+ "ba3cb833609db6891d65994767fa73bebe34832f1181a48a3a3a8421b8e6df4c": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "NeoSpend checking: your deposit product is FDIC-insured up to $250,000 through Example Bank, Member FDIC.",
+   "location": "advertised product description",
+   "reason": "The product being advertised is a checking account, which is a deposit product. The FDIC insurance language matches the required formulation, stating the deposit product is FDIC-insured up to $250,000 through Example Bank.",
+   "requirement_met": true,
+   "trigger_met": true
+  }
+ },
+ "bf05ca7ce74a049738d7c888992c6b66d27c21ab54757473a101c20a33ee7992": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "RefundFast advance: 19% APR",
+   "location": "beginning of the material",
+   "reason": "The material states a rate of finance charge as 19% APR, which meets the requirement of stating the finance charge as an APR. The quote provided is a direct statement of the APR, leaving no ambiguity.",
+   "requirement_met": true,
+   "trigger_met": true
+  }
+ },
+ "cac6c21ecb0bdf163a8bd24308976f1af345d0a80a078901b78c4c0cf91cdd1c": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "",
+   "location": "",
+   "reason": "The material does not state a specific bonus, it only mentions 'bonus checking' and 'get a bonus when you open a checking account' which are general statements that do not trigger the bonus disclosures.",
+   "requirement_met": null,
+   "trigger_met": false
+  }
+ },
+ "d554ef8cbfe86a2981d4019650e7d6096312832d9584bcf74ae63c01a9e12eee": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "Millions file free every year with TaxCo Free Edition. ~37% of filers qualify. Simple Form 1040 returns only (no schedules, except for EITC, CTC, student loan interest, and Schedule 1-A).",
+   "location": "extracted page text",
+   "reason": "The material mentions the free tax-filing product and the eligibility disclosure is present right underneath the free mention, as required.",
+   "requirement_met": true,
+   "trigger_met": true
+  }
+ },
+ "d9f32e3e4cbf1c24f86a05e4f45e20f811fe73fe03c0e3a72fb6b101733e0bf0": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "File free with TaxCo Free Edition. ~37% of filers qualify. Simple Form 1040 returns only (no schedules, except for EITC, CTC, student loan interest, and Schedule 1-A).",
+   "location": "extracted page text",
+   "reason": "The material mentions 'File free' which triggers the rule, and the required disclosure is present right underneath the free mention.",
+   "requirement_met": true,
+   "trigger_met": true
+  }
+ },
+ "e3a9ce7747b779d9fcc6912de85e895cc0433f98911127b929188c2ff58051d0": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "financing at just 1.5% per month",
+   "location": "main text",
+   "reason": "The material states a rate of finance charge as 1.5% per month, which triggers the rule. However, it does not explicitly state this rate as an APR. Therefore, the requirement is not met.",
+   "requirement_met": false,
+   "trigger_met": true
+  }
+ },
+ "f033d22036a0c4686e79bbceae3cf12f42c9613ee7ebfcb7010fca6229f6c48c": {
+  "model": "groq:llama-3.3-70b-versatile",
+  "prompt_preview": "You are a marketing-compliance analyst for a fintech's bank partner. Judge ONE rule against ONE marketing material. Be precise and conservative: never invent co",
+  "verdict": {
+   "confidence": 1.0,
+   "evidence_quote": "",
+   "location": "",
+   "reason": "The material does not mention TurboTax Free, so the trigger is not met.",
+   "requirement_met": null,
+   "trigger_met": false
+  }
+ }
+}

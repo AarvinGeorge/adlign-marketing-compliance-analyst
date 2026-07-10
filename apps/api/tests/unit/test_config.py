@@ -81,7 +81,7 @@ class TestModelRegistry:
         # after the 3.x rollout ("no longer available to new users").
         settings = make_settings()
         assert settings.model_for("extract") == "google_genai:gemini-3.5-flash"
-        assert settings.model_for("check") == "google_genai:gemini-3.5-flash"
+        assert settings.model_for("check") == "groq:llama-3.3-70b-versatile"
         assert settings.model_for("cluster_label") == "groq:llama-3.3-70b-versatile"
         assert settings.model_for("report") == "google_genai:gemini-3.5-flash"
 
