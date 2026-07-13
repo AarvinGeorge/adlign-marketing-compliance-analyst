@@ -90,8 +90,12 @@ async def suggest_issues_for_run(
 async def set_issue_state(
     session: AsyncSession, cluster_id: str, state: str,
 ) -> dict:
-    if state not in ("confirmed", "rejected"):
-        raise ValueError("state must be confirmed or rejected")
+    """confirmed: keep grouping. rejected: UNGROUP (detach children; parent
+    kept as memory). suggested: UNDO an ungroup — re-attach the snapshot
+    members that are still unparented (grouping-as-a-view redesign,
+    2026-07-13: every action must be reversible in place)."""
+    if state not in ("confirmed", "rejected", "suggested"):
+        raise ValueError("state must be confirmed, rejected or suggested")
     parent = (await session.execute(
         select(Cluster).where(Cluster.id == cluster_id,
                               Cluster.kind == "issue")
@@ -105,6 +109,14 @@ async def set_issue_state(
         )).scalars().all()
         for child in children:
             child.parent_cluster_id = None
+    elif state == "suggested":
+        member_ids = parent.member_snapshot.get("member_cluster_ids", [])
+        members = (await session.execute(
+            select(Cluster).where(Cluster.id.in_(member_ids))
+        )).scalars().all()
+        for m in members:
+            if m.parent_cluster_id is None:
+                m.parent_cluster_id = parent.id
     session.add(Event(
         run_id=parent.run_id, event_type=f"issue_{state}", node="issues",
         payload={"cluster_id": parent.id, "label": parent.label},

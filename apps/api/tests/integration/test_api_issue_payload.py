@@ -7,7 +7,9 @@ meta:
            suggested/confirmed issue groupings without new endpoints.
   contract: clusters[] is additive; flags keep cluster_id + cluster_label
             unchanged (backward compatible). Rejected parents still serialize
-            (the UI filters them); their children are detached.
+            (the UI filters them); their children are detached. Grouping is a
+            view: PATCH state=rejected ungroups, PATCH state=suggested undoes
+            the ungroup (snapshot members re-attach).
   deps: docker Postgres (skipped when down); reuses the seeded test DB
         fixture pattern from test_seed_db.
 """
@@ -120,7 +122,7 @@ async def test_flags_payload_unchanged_backward_compatible(client_with_issue):
     assert f1["cluster_label"] == "Free claim wording A"
 
 
-async def test_confirm_then_reject_roundtrip_reflected_in_payload(client_with_issue):
+async def test_confirm_reject_restore_roundtrip_reflected_in_payload(client_with_issue):
     client, ids = client_with_issue
     pid = ids["parent"].id
     r = await client.patch(f"/clusters/{pid}/issue-state",
@@ -143,3 +145,18 @@ async def test_confirm_then_reject_roundtrip_reflected_in_payload(client_with_is
     assert sorted(parent["member_cluster_ids"]) == sorted(
         [ids["w1"].id, ids["w2"].id]
     )
+
+    # UNDO the ungroup (grouping is a view): state=suggested re-attaches the
+    # snapshot members that are still unparented.
+    r = await client.patch(f"/clusters/{pid}/issue-state",
+                           json={"state": "suggested"})
+    assert r.status_code == 200, r.text
+    body = (await client.get("/products/turbotax-free")).json()
+    parent = next(c for c in body["clusters"] if c["id"] == pid)
+    assert parent["state"] == "suggested"
+    for key in ("w1", "w2"):
+        child = next(c for c in body["clusters"] if c["id"] == ids[key].id)
+        assert child["parent_cluster_id"] == pid
+    # the unrelated wording cluster stays untouched
+    loner = next(c for c in body["clusters"] if c["id"] == ids["w3"].id)
+    assert loner["parent_cluster_id"] is None

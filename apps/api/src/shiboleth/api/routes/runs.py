@@ -51,6 +51,20 @@ async def start_check(body: CheckRequest, request: Request) -> dict:
         async with app.state.session_factory() as session:
             run_id = await run_corpus(session, invoke, labeler,
                                       product_id=body.product_id)
+        # grouping-as-a-view (2026-07-13): runs arrive pre-grouped; failure
+        # here must never fail the run (the UI also self-heals on load)
+        try:
+            from shiboleth.pipeline.nodes.issues import (
+                production_adjudicator, production_signer)
+            from shiboleth.services.issues import suggest_issues_for_run
+
+            model = app.state.settings.model_for("issue")
+            async with app.state.session_factory() as session:
+                await suggest_issues_for_run(
+                    session, run_id,
+                    production_signer(model), production_adjudicator(model))
+        except Exception as exc:  # noqa: BLE001 — non-fatal by contract
+            print(f"issue auto-suggest skipped: {type(exc).__name__}: {exc}")
         return {"run_id": run_id}
 
     # live (07 §3 S1): the run row is created + committed HERE so the caller

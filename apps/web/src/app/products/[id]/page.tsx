@@ -1,19 +1,21 @@
 // meta: U6 product detail (/products/[id]). API-backed via useProductView:
 // metric row computed from live scores + lifecycle overlay, flags list with
-// BOTH groupings toggleable (by cluster AND by property; clusters are the
-// run's real cluster tree incl. AI-suggested issue groupings with the
-// rationale always visible, accept / keep separate against
-// PATCH /clusters/{id}/issue-state, and a Suggest groupings action against
-// POST /runs/{id}/issue-suggestions), cluster bulk actions (sequential
-// dispositions against POST /flags/{id}/disposition), per-flag disposition
-// via FlagRow, lifecycle chips, three-tag verdicts. Demo products (404 from
-// the API) fall back to their fixture summaries with no flags.
+// THREE groupings toggleable (by issue / by cluster / by property). Grouping
+// is a VIEW, not a decision (Gmail-threading pattern): AI issue groupings
+// render with the rationale always visible and a single reversible Ungroup
+// action with in-place Undo (PATCH /clusters/{id}/issue-state, rejected then
+// suggested); no accept flow. A self-healing auto-trigger fires
+// POST /runs/{id}/issue-suggestions once for completed runs with wording
+// clusters but zero issue rows. Cluster bulk actions (sequential dispositions
+// against POST /flags/{id}/disposition), per-flag disposition via FlagRow,
+// lifecycle chips, three-tag verdicts. Demo products (404 from the API) fall
+// back to their fixture summaries with no flags.
 
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Check, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Check, Loader2, RefreshCw, Sparkles, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/primitives/metric-card";
@@ -35,7 +37,21 @@ import { useFlagStore } from "@/lib/flag-store";
 import type { FlagState, IntersectionTag, PropertyKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type Grouping = "cluster" | "property";
+type Grouping = "issue" | "cluster" | "property";
+
+const GROUPING_LABEL: Record<Grouping, string> = {
+  issue: "By issue",
+  cluster: "By cluster",
+  property: "By property",
+};
+
+/** An issue grouping the analyst ungrouped this session: keeps the in-place
+ *  Undo available until reload (after a reload the rejected parent simply
+ *  does not render and its members show flat). */
+interface UngroupedIssue {
+  id: string;
+  label: string;
+}
 
 export default function ProductDetailPage({
   params,
@@ -43,11 +59,38 @@ export default function ProductDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { summary, metrics, clusters, views, isLoading, apiDown } =
-    useProductView(id);
-  const [grouping, setGrouping] = useState<Grouping>("cluster");
+  const {
+    summary,
+    metrics,
+    clusters,
+    issueClusters,
+    hasIssueRows,
+    views,
+    isLoading,
+    apiDown,
+  } = useProductView(id);
+  const [groupingChoice, setGroupingChoice] = useState<Grouping | null>(null);
+  const [ungrouped, setUngrouped] = useState<UngroupedIssue[]>([]);
   const suggest = useSuggestIssues(id);
-  const [suggestNote, setSuggestNote] = useState<string | null>(null);
+  const autoFired = useRef(false);
+
+  // By issue is the default whenever the run has AI groupings to show.
+  const hasIssueGroups = issueClusters.some((c) => c.kind === "issue");
+  const grouping: Grouping =
+    groupingChoice ?? (hasIssueGroups ? "issue" : "cluster");
+
+  // Self-healing auto-suggest: runs that predate route-level auto-suggestion
+  // have wording clusters but zero issue rows; generate once, silently.
+  const runId = summary?.runId ?? null;
+  const runSettled =
+    summary?.status === "flagged" || summary?.status === "clear";
+  const wordingCount = clusters.filter((c) => c.id !== "unclustered").length;
+  useEffect(() => {
+    if (autoFired.current || !runId || !runSettled) return;
+    if (hasIssueRows || wordingCount < 2) return;
+    autoFired.current = true;
+    suggest.mutate(runId); // silent on failure by design
+  }, [runId, runSettled, hasIssueRows, wordingCount, suggest]);
 
   if (isLoading) {
     return (
@@ -132,58 +175,14 @@ export default function ProductDetailPage({
         <>
           <div className="mb-3.5 flex items-center gap-3">
             <span className="flex-1 text-[13px] font-semibold">
-              {views.length} flags in{" "}
-              {clusters.reduce(
-                (n, c) =>
-                  n +
-                  (c.kind === "issue"
-                    ? c.members.length
-                    : c.id === "unclustered"
-                      ? 0
-                      : 1),
-                0
-              )}{" "}
-              clusters
+              {views.length} flags in {wordingCount} clusters
             </span>
-            {grouping === "cluster" && suggestNote ? (
-              <span className="text-xs text-muted-foreground">
-                {suggestNote}
-              </span>
-            ) : null}
-            {grouping === "cluster" && summary.runId ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                disabled={suggest.isPending}
-                onClick={async () => {
-                  setSuggestNote(null);
-                  try {
-                    const res = await suggest.mutateAsync(
-                      summary.runId as string
-                    );
-                    if (res.length === 0) {
-                      setSuggestNote("No new groupings suggested");
-                    }
-                  } catch {
-                    setSuggestNote("Could not suggest groupings");
-                  }
-                }}
-              >
-                {suggest.isPending ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="size-3.5" />
-                )}
-                Suggest groupings
-              </Button>
-            ) : null}
             <div className="flex rounded-md bg-muted p-[3px]">
-              {(["cluster", "property"] as const).map((g) => (
+              {(["issue", "cluster", "property"] as const).map((g) => (
                 <button
                   key={g}
                   type="button"
-                  onClick={() => setGrouping(g)}
+                  onClick={() => setGroupingChoice(g)}
                   className={cn(
                     "flex h-7 items-center whitespace-nowrap rounded-sm px-3 text-xs",
                     grouping === g
@@ -191,30 +190,39 @@ export default function ProductDetailPage({
                       : "font-medium text-muted-foreground"
                   )}
                 >
-                  {g === "cluster" ? "By cluster" : "By property"}
+                  {GROUPING_LABEL[g]}
                 </button>
               ))}
             </div>
           </div>
 
-          {grouping === "cluster" ? (
+          {grouping === "issue" ? (
             <div className="flex flex-col gap-3.5">
-              {clusters.map((c) =>
+              {ungrouped.map((u) => (
+                <UngroupedBanner
+                  key={u.id}
+                  issue={u}
+                  productId={id}
+                  onRestored={() =>
+                    setUngrouped((prev) => prev.filter((x) => x.id !== u.id))
+                  }
+                />
+              ))}
+              {issueClusters.map((c) =>
                 c.kind === "issue" ? (
-                  c.state === "suggested" ? (
-                    <IssueSuggestionCard
-                      key={c.id}
-                      cluster={c}
-                      productId={id}
-                    />
-                  ) : (
-                    <IssueClusterGroup
-                      key={c.id}
-                      cluster={c}
-                      views={views}
-                      productId={id}
-                    />
-                  )
+                  <IssueClusterGroup
+                    key={c.id}
+                    cluster={c}
+                    views={views}
+                    productId={id}
+                    onUngrouped={() =>
+                      setUngrouped((prev) =>
+                        prev.some((x) => x.id === c.id)
+                          ? prev
+                          : [...prev, { id: c.id, label: c.label }]
+                      )
+                    }
+                  />
                 ) : (
                   <ClusterGroup
                     key={c.id}
@@ -226,6 +234,19 @@ export default function ProductDetailPage({
                   />
                 )
               )}
+            </div>
+          ) : grouping === "cluster" ? (
+            <div className="flex flex-col gap-3.5">
+              {clusters.map((c) => (
+                <ClusterGroup
+                  key={c.id}
+                  label={c.label}
+                  sourceLine={c.sourceLine}
+                  dominantTag={c.dominantTag}
+                  views={memberViews(c, views)}
+                  productId={id}
+                />
+              ))}
             </div>
           ) : (
             <div className="flex flex-col gap-3.5">
@@ -358,40 +379,44 @@ function memberViews(c: ClusterView, views: FlagView[]): FlagView[] {
     .filter((v): v is FlagView => v !== undefined);
 }
 
-/** A SUGGESTED issue grouping: the AI's proposal to treat several wording
- *  clusters as one issue. The rationale is always in plain sight (the
- *  explainability contract: the analyst must see WHY it grouped) and the
- *  human has the last word via Accept grouping / Keep separate. */
-function IssueSuggestionCard({
+/** An AI issue grouping (suggested and confirmed render identically:
+ *  grouping is a view, not a decision). The rationale is always in plain
+ *  sight (the explainability contract: the analyst must see WHY it grouped);
+ *  the only action is a reversible Ungroup. Member wording clusters render
+ *  nested inside with their own rows and bulk actions. */
+function IssueClusterGroup({
   cluster,
+  views,
   productId,
+  onUngrouped,
 }: {
   cluster: ClusterView;
+  views: FlagView[];
   productId: string;
+  onUngrouped: () => void;
 }) {
   const issueState = useIssueState(productId);
-  const [pendingAction, setPendingAction] = useState<
-    "confirmed" | "rejected" | null
-  >(null);
+  const [expanded, setExpanded] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function decide(state: "confirmed" | "rejected") {
-    setPendingAction(state);
+  async function ungroup() {
     setError(null);
     try {
-      await issueState.mutateAsync({ clusterId: cluster.id, state });
+      await issueState.mutateAsync({
+        clusterId: cluster.id,
+        state: "rejected",
+      });
+      onUngrouped();
     } catch (err) {
       setError(
         err instanceof ApiError ? err.detail : "The API is unreachable."
       );
-    } finally {
-      setPendingAction(null);
     }
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-accent-foreground/25 bg-background">
-      <div className="flex items-center gap-2.5 border-b border-border/60 bg-accent/50 px-5 py-3.5">
+    <div className="overflow-hidden rounded-lg border border-border bg-background">
+      <div className="flex items-center gap-2.5 border-b border-border/60 bg-surface px-5 py-3.5">
         <IntersectionPill tag={cluster.dominantTag} />
         <div className="flex min-w-0 flex-1 flex-col leading-snug">
           <span className="flex items-center gap-2 text-[13px] font-semibold">
@@ -401,7 +426,7 @@ function IssueSuggestionCard({
               className="gap-1 bg-accent font-medium text-accent-foreground"
             >
               <Sparkles className="size-3" />
-              AI suggested grouping
+              AI grouped
             </Badge>
           </span>
           <span className="text-xs text-muted-foreground">
@@ -413,27 +438,20 @@ function IssueSuggestionCard({
           size="sm"
           className="text-muted-foreground"
           disabled={issueState.isPending}
-          onClick={() => decide("rejected")}
+          onClick={ungroup}
         >
-          {pendingAction === "rejected" ? (
+          {issueState.isPending ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : null}
-          Keep separate
+          Ungroup
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          disabled={issueState.isPending}
-          onClick={() => decide("confirmed")}
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="text-xs font-medium text-muted-foreground hover:text-foreground"
         >
-          {pendingAction === "confirmed" ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Check className="size-3.5" />
-          )}
-          Accept grouping
-        </Button>
+          {expanded ? "Collapse" : `Show ${cluster.members.length} clusters`}
+        </button>
       </div>
       {cluster.rationale ? (
         <p className="border-b border-border/60 px-5 py-3 text-xs leading-relaxed text-muted-foreground">
@@ -446,69 +464,8 @@ function IssueSuggestionCard({
           {error}
         </p>
       ) : null}
-      <div className="divide-y divide-border/60">
-        {cluster.members.map((m) => (
-          <div key={m.id} className="flex items-center gap-2.5 px-5 py-2.5">
-            <IntersectionPill tag={m.dominantTag} />
-            <span className="min-w-0 flex-1 truncate text-[13px]">
-              {m.label}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {m.flagIds.length} {m.flagIds.length === 1 ? "flag" : "flags"}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** A CONFIRMED issue grouping: the analyst's unit of review. Member wording
- *  clusters render nested inside, each with its own rows and bulk actions. */
-function IssueClusterGroup({
-  cluster,
-  views,
-  productId,
-}: {
-  cluster: ClusterView;
-  views: FlagView[];
-  productId: string;
-}) {
-  const [expanded, setExpanded] = useState(true);
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-background">
-      <div className="flex items-center gap-2.5 border-b border-border/60 bg-surface px-5 py-3.5">
-        <IntersectionPill tag={cluster.dominantTag} />
-        <div className="flex min-w-0 flex-1 flex-col leading-snug">
-          <span className="flex items-center gap-2 text-[13px] font-semibold">
-            {cluster.label}
-            <Badge variant="outline" className="font-medium text-muted-foreground">
-              Grouped issue
-            </Badge>
-          </span>
-          <span className="text-xs text-muted-foreground">
-            <SourceLine text={cluster.sourceLine} />
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="text-xs font-medium text-muted-foreground hover:text-foreground"
-        >
-          {expanded ? "Collapse" : `Show ${cluster.members.length} clusters`}
-        </button>
-      </div>
       {expanded ? (
         <div className="flex flex-col gap-2.5 bg-surface/60 p-3">
-          {cluster.rationale ? (
-            <p className="px-2 text-xs leading-relaxed text-muted-foreground">
-              <span className="font-medium text-foreground/80">
-                Why grouped:{" "}
-              </span>
-              {cluster.rationale}
-            </p>
-          ) : null}
           {cluster.members.map((m) => (
             <ClusterGroup
               key={m.id}
@@ -521,6 +478,60 @@ function IssueClusterGroup({
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Session-scoped replacement for an ungrouped issue card: keeps the undo
+ *  one click away, exactly where the card was. */
+function UngroupedBanner({
+  issue,
+  productId,
+  onRestored,
+}: {
+  issue: UngroupedIssue;
+  productId: string;
+  onRestored: () => void;
+}) {
+  const issueState = useIssueState(productId);
+  const [error, setError] = useState<string | null>(null);
+
+  async function undo() {
+    setError(null);
+    try {
+      await issueState.mutateAsync({
+        clusterId: issue.id,
+        state: "suggested",
+      });
+      onRestored();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.detail : "The API is unreachable."
+      );
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg border border-dashed border-border bg-surface px-5 py-2">
+      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        <span className="font-medium text-foreground/80">{issue.label}</span>
+        {" · "}Ungrouped by you
+      </span>
+      {error ? <span className="text-xs text-danger-text">{error}</span> : null}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="gap-1.5"
+        disabled={issueState.isPending}
+        onClick={undo}
+      >
+        {issueState.isPending ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <Undo2 className="size-3.5" />
+        )}
+        Undo
+      </Button>
     </div>
   );
 }

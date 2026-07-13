@@ -239,9 +239,12 @@ export function postIssueSuggestions(
   });
 }
 
+// PATCH /clusters/{id}/issue-state: rejected = ungroup (detaches children),
+// suggested = undo the ungroup (re-attaches snapshot members still
+// unparented), confirmed = keep.
 export function patchIssueState(
   clusterId: string,
-  state: "confirmed" | "rejected"
+  state: "confirmed" | "rejected" | "suggested"
 ): Promise<{ id: string; state: string }> {
   return fetchJson<{ id: string; state: string }>(
     `/clusters/${clusterId}/issue-state`,

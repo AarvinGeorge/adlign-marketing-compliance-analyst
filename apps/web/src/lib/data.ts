@@ -353,11 +353,13 @@ function buildSummary(
 // U6 / U7 product view
 // ---------------------------------------------------------------------------
 
-// Cluster tree for the U6 cluster surface (clustering C3). kind="wording" =
-// the deterministic exact-wording clusters (members empty); kind="issue" =
-// an AI-suggested parent grouping wording clusters into one analyst decision
-// (members carry the nested wording clusters). Rejected parents never reach
-// the UI; their children come back as top-level wording clusters.
+// Cluster views for the U6 cluster surface (clustering C3, grouping-as-a-view
+// redesign 2026-07-13). kind="wording" = the deterministic exact-wording
+// clusters (members empty); kind="issue" = an AI grouping of wording clusters
+// into one issue (members carry the nested wording clusters). Grouping is a
+// VIEW, not a decision (Gmail-threading pattern): suggested and confirmed
+// parents render identically, rejected parents never reach the UI (their
+// children come back flat), and ungrouping is undoable in place.
 export interface ClusterView extends ClusterFixture {
   kind: "wording" | "issue";
   state: "auto" | "suggested" | "confirmed" | "rejected";
@@ -368,7 +370,13 @@ export interface ClusterView extends ClusterFixture {
 export interface ProductView {
   summary: ProductSummary | undefined;
   metrics: MetricFixture[];
+  /** Flat wording clusters, exactly the pre-issue-layer list (By cluster). */
   clusters: ClusterView[];
+  /** Issue tree: AI-grouped parents first, unparented flat below (By issue). */
+  issueClusters: ClusterView[];
+  /** Any issue row in the payload, INCLUDING rejected ones. Guards the
+   *  self-healing auto-suggest so a refused grouping is never re-fired. */
+  hasIssueRows: boolean;
   views: FlagView[];
   isLoading: boolean;
   apiDown: boolean;
@@ -408,6 +416,8 @@ export function useProductView(productId: string): ProductView {
       summary: undefined,
       metrics: [],
       clusters: [],
+      issueClusters: [],
+      hasIssueRows: false,
       views: [],
       isLoading: q.isLoading,
       apiDown: q.isError && !notFound,
@@ -419,7 +429,10 @@ export function useProductView(productId: string): ProductView {
 function buildProductView(
   detail: ApiProductDetail,
   lifecycles: Record<string, FlagLifecycle>
-): Pick<ProductView, "summary" | "metrics" | "clusters" | "views"> {
+): Pick<
+  ProductView,
+  "summary" | "metrics" | "clusters" | "issueClusters" | "hasIssueRows" | "views"
+> {
   const propById = new Map(detail.properties.map((p) => [p.id, p]));
   const websiteProp =
     detail.properties.find((p) => p.kind === "website") ??
@@ -515,23 +528,24 @@ function buildProductView(
       };
     })
     .filter((v): v is ClusterView => v !== null)
-    .sort((a, b) =>
-      a.state === b.state
-        ? b.flagIds.length - a.flagIds.length
-        : a.state === "suggested"
-          ? -1
-          : 1
-    );
+    // suggested and confirmed are the same thing to the analyst (grouping is
+    // a view, not a decision): order by weight only.
+    .sort((a, b) => b.flagIds.length - a.flagIds.length);
 
+  const byWeight = (a: ClusterView, b: ClusterView) => {
+    if (a.id === "unclustered") return 1;
+    if (b.id === "unclustered") return -1;
+    return b.flagIds.length - a.flagIds.length;
+  };
   const topWording = wordingViews
     .filter((w) => parentOf(w.id) === null)
-    .sort((a, b) => {
-      if (a.id === "unclustered") return 1;
-      if (b.id === "unclustered") return -1;
-      return b.flagIds.length - a.flagIds.length;
-    });
+    .sort(byWeight);
 
-  const clusters: ClusterView[] = [...issueViews, ...topWording];
+  // By cluster = the flat pre-issue-layer list (parents ignored entirely);
+  // By issue = grouped parents first, then the unparented flat remainder.
+  const clusters: ClusterView[] = [...wordingViews].sort(byWeight);
+  const issueClusters: ClusterView[] = [...issueViews, ...topWording];
+  const hasIssueRows = apiClusters.some((c) => c.kind === "issue");
 
   const summary = buildSummary(
     {
@@ -547,7 +561,14 @@ function buildProductView(
     0
   );
 
-  return { summary, metrics: buildMetrics(detail, lifecycles), clusters, views };
+  return {
+    summary,
+    metrics: buildMetrics(detail, lifecycles),
+    clusters,
+    issueClusters,
+    hasIssueRows,
+    views,
+  };
 }
 
 function toFlagView(f: ApiFlag, property: Property, model: string): FlagView {
@@ -794,8 +815,9 @@ export function useDisposition(productId: string) {
 // ---------------------------------------------------------------------------
 
 /** POST /runs/{run_id}/issue-suggestions, then refetch the product so the
- *  new SUGGESTED parents render. The API is idempotent; an empty array is
- *  the honest "no new groupings" answer, not an error. */
+ *  new parents render. Used by the SELF-HEALING auto-trigger (fires once when
+ *  a completed run has wording clusters but zero issue rows, e.g. runs that
+ *  predate route-level auto-suggestion). Idempotent on the API side. */
 export function useSuggestIssues(productId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -806,14 +828,15 @@ export function useSuggestIssues(productId: string) {
   });
 }
 
-/** PATCH /clusters/{id}/issue-state: the analyst's accept/keep-separate
- *  decision on a suggested grouping. */
+/** PATCH /clusters/{id}/issue-state. Grouping is a view: rejected = ungroup
+ *  (children detach), suggested = undo the ungroup (snapshot members that are
+ *  still unparented re-attach). */
 export function useIssueState(productId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: {
       clusterId: string;
-      state: "confirmed" | "rejected";
+      state: "confirmed" | "rejected" | "suggested";
     }) => patchIssueState(input.clusterId, input.state),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product", productId] });
