@@ -43,9 +43,10 @@ import { cn } from "@/lib/utils";
 
 type Grouping = "issue" | "property";
 
+// Display vocabulary: "medium" (the code identifier stays "property").
 const GROUPING_LABEL: Record<Grouping, string> = {
   issue: "By issue",
-  property: "By property",
+  property: "By medium",
 };
 
 /** An issue grouping the analyst ungrouped this session: keeps the in-place
@@ -364,7 +365,7 @@ function memberViews(c: ClusterView, views: FlagView[]): FlagView[] {
 }
 
 /** One-line root-cause hint from the member flags' real property/material
- *  data: "41 pages on turbotax.intuit.com" or "across 2 properties · 41
+ *  data: "41 pages on turbotax.intuit.com" or "across 2 mediums · 41
  *  pages". Counts distinct materials, never invents numbers. */
 function scopeLine(views: FlagView[]): string | null {
   if (views.length === 0) return null;
@@ -384,7 +385,7 @@ function scopeLine(views: FlagView[]): string | null {
         : property.url_or_handle;
     return `${pages} ${pages === 1 ? unit : `${unit}s`} on ${place}`;
   }
-  return `across ${byProperty.size} properties · ${pages} ${pages === 1 ? "page" : "pages"}`;
+  return `across ${byProperty.size} mediums · ${pages} ${pages === 1 ? "page" : "pages"}`;
 }
 
 /** An AI issue grouping (suggested and confirmed render identically:

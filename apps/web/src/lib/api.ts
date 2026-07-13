@@ -199,13 +199,33 @@ export function postCreateProduct(body: {
   });
 }
 
+// Both modes start as background tasks. Live returns {run_id, status:
+// "started"}; corpus returns {status: "started"} WITHOUT run_id (the run row
+// is created inside the task) — poll the product queries instead. page_cap
+// is the semantic-discovery top-N per marketing medium.
 export function postCheck(
   productId: string,
-  mode: "live" | "corpus" = "live"
-): Promise<{ run_id: string; status?: string }> {
-  return fetchJson<{ run_id: string; status?: string }>("/checks", {
-    method: "POST",
-    body: JSON.stringify({ product_id: productId, mode }),
+  mode: "live" | "corpus" = "live",
+  pageCap?: number
+): Promise<{ run_id?: string; status?: string; mode?: string }> {
+  return fetchJson<{ run_id?: string; status?: string; mode?: string }>(
+    "/checks",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        product_id: productId,
+        mode,
+        ...(pageCap !== undefined ? { page_cap: pageCap } : {}),
+      }),
+    }
+  );
+}
+
+/** DELETE /runs/{id}: removes the run and ALL its records (events, flags,
+ *  clusters, inventory). Shared page snapshots survive. 404 when unknown. */
+export function deleteRunApi(runId: string): Promise<{ deleted: string }> {
+  return fetchJson<{ deleted: string }>(`/runs/${runId}`, {
+    method: "DELETE",
   });
 }
 

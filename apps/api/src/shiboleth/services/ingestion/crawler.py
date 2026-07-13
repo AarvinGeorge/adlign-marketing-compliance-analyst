@@ -96,6 +96,42 @@ async def crawl_website(
     return pages
 
 
+async def fetch_urls(
+    urls: list[str], politeness_delay: float = 1.0
+) -> list[tuple[str, str]]:
+    """Fetch an explicit URL list (semantic-discovery path): same proven
+    crawl4ai config as the BFS crawl, no link discovery. Per-page failures
+    are skipped; raises ConnectionError only when EVERY page fails."""
+    from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+
+    browser_config = BrowserConfig(headless=True, user_agent=USER_AGENT)
+    run_config = CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+        wait_until="domcontentloaded",
+        page_timeout=PAGE_TIMEOUT_MS,
+        delay_before_return_html=3.0,
+        scan_full_page=True,
+        scroll_delay=0.3,
+        remove_overlay_elements=True,
+    )
+    pages: list[tuple[str, str]] = []
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        for url in urls:
+            try:
+                result = await crawler.arun(url=url, config=run_config)
+            except Exception:  # noqa: BLE001
+                continue
+            if not getattr(result, "success", False):
+                continue
+            markdown = _raw_markdown(result)
+            if markdown.strip():
+                pages.append((url, markdown))
+            await asyncio.sleep(politeness_delay)
+    if urls and not pages:
+        raise ConnectionError("all discovered pages failed to fetch")
+    return pages
+
+
 def _raw_markdown(result) -> str:
     """raw_markdown across crawl4ai version shapes; NEVER fit_markdown."""
     md = getattr(result, "markdown", None)

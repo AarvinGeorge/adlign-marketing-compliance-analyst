@@ -45,8 +45,10 @@ export interface ProductSummary {
   runId: string | null;
   // running: real material_fetched count vs the run's crawl cap (no timers)
   progress: { fetched: number; cap: number } | null;
-  // awaiting_input: properties the run parked, needing paste or skip
+  // awaiting_input (legacy runs only): mediums parked for paste or skip
   parked: ParkedProperty[];
+  // mediums the run auto-skipped (automated fetch unavailable); quiet note
+  skipped: ParkedProperty[];
 }
 
 export interface SublabelPart {

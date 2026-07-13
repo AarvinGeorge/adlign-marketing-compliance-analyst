@@ -44,6 +44,8 @@ MODEL_STAGES: dict[str, tuple[str, str]] = {
     "issue": ("DEFAULT_MODEL_ISSUE", "anthropic:claude-haiku-4-5"),
     # customize layer: rule -> binary decomposition + retrieval keywords
     "decompose": ("DEFAULT_MODEL_DECOMPOSE", "anthropic:claude-haiku-4-5"),
+    # semantic page discovery: URL relevance ranking vs the live scorecard
+    "discover": ("DEFAULT_MODEL_DISCOVER", "anthropic:claude-haiku-4-5"),
 }
 
 LANGSMITH_PROJECT_DEFAULT = "shiboleth-marketing-compliance-analyst-project"

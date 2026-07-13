@@ -65,7 +65,16 @@ async def create_live_run(session: AsyncSession, product_id: str) -> str:
 async def start_live_run(
     session: AsyncSession, invoke, labeler, product_id: str,
     depth: int = 2, cap: int = 20, run_id: str | None = None,
+    ranker=None,
 ) -> str:
+    """Ingestion redesign (Aarvin 2026-07-13): marketing mediums are
+    OPTIONAL — whichever fetch succeeds feeds the check; a medium that
+    fails is auto-skipped (recorded in coverage) and the run continues.
+    No awaiting_input barrier, no modal. Website mediums use SEMANTIC
+    discovery when a ranker is provided (sitemap harvest + LLM
+    rule-relevance ranking against the LIVE scorecard, top page-cap pages;
+    the ground-truth-v2 mechanism) with BFS crawl as the no-sitemap
+    fallback. page cap applies PER MEDIUM."""
     if run_id is None:
         run_id = await create_live_run(session, product_id)
     run = await session.get(Run, run_id)
@@ -78,36 +87,50 @@ async def start_live_run(
     statuses: dict[str, str] = {}
     for prop in properties:
         await _emit(session, run.id, "node_started", "ingest", {}, )
-        if prop.kind == "website":
-            try:
-                from shiboleth.services.ingestion.crawler import crawl_website
+        try:
+            if prop.kind == "website":
+                from shiboleth.services.ingestion.crawler import (crawl_website,
+                                                                  fetch_urls)
 
-                pages = await crawl_website(prop.url_or_handle, depth=depth, cap=cap)
+                pages: list[tuple[str, str]] = []
+                if ranker is not None:
+                    from shiboleth.services.ingestion.discovery import discover_urls
+                    from shiboleth.services.scorecard import load_rule_bundles
+
+                    bundles = await load_rule_bundles(session)
+                    rules = [b["rule"] for b in bundles]
+                    urls = await discover_urls(prop.url_or_handle, rules,
+                                               cap, ranker)
+                    if urls:
+                        await _emit(session, run.id, "pages_discovered",
+                                    "ingest", {"mode": "semantic",
+                                               "candidates": len(urls)})
+                        pages = await fetch_urls(urls)
+                if not pages:  # no ranker or no sitemap: BFS fallback
+                    pages = await crawl_website(prop.url_or_handle,
+                                                depth=depth, cap=cap)
                 for url, markdown in pages:
                     await _store_material(session, run, prop.id, url, markdown)
                 statuses[prop.id] = "fetched"
                 await _emit(session, run.id, "property_status", "ingest",
-                            {"status": "fetched", "pages": len(pages)},
-                            )
-            except Exception as exc:  # noqa: BLE001 — root failure parks the property
-                statuses[prop.id] = "needs_input"
-                await _emit(session, run.id, "needs_input", "ingest",
-                            {"detail": str(exc)[:200]})
-        else:
-            # Meta properties: no scraper in MVP1 scope; paste is first-class
-            statuses[prop.id] = "needs_input"
-            await _emit(session, run.id, "needs_input", "ingest",
-                        {"detail": f"{prop.kind}: paste content or skip"})
+                            {"status": "fetched", "pages": len(pages)})
+            else:
+                # social mediums: hard time-boxed attempt is day-2; today the
+                # honest behavior is auto-skip (Meta blocks scrapers) — the
+                # run NEVER parks on it, coverage records the gap, and paste
+                # remains available from the run view
+                statuses[prop.id] = "skipped"
+                await _emit(session, run.id, "property_status", "ingest",
+                            {"status": "skipped",
+                             "detail": f"{prop.kind}: automated fetch "
+                                       "unavailable; medium skipped"})
+        except Exception as exc:  # noqa: BLE001 — a failed medium never blocks the run
+            statuses[prop.id] = "skipped"
+            await _emit(session, run.id, "property_status", "ingest",
+                        {"status": "skipped", "detail": str(exc)[:200]})
 
     run.scores = {**(run.scores or {}), "property_status": statuses,
-                  "config": {"depth": depth, "cap": cap}}
-    if barrier_state(statuses) == "awaiting_input":
-        run.status = "awaiting_input"
-        await _emit(session, run.id, "run_awaiting_input", "graph",
-                    {"statuses": statuses})
-        await session.commit()
-        return run.id
-
+                  "config": {"cap_per_medium": cap}}
     await resume_checking(session, invoke, labeler, run.id)
     return run.id
 

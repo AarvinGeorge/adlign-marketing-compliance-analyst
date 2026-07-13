@@ -48,14 +48,14 @@ export function PasteDialog({
         <DialogHeader>
           <DialogTitle className="text-base">Provide content</DialogTitle>
           <DialogDescription className="text-xs">
-            These properties could not be fetched automatically. Paste the
+            These mediums could not be fetched automatically. Paste the
             content to include each one, or skip it and note the gap.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           {parked.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              All properties resolved. The run is finishing.
+              All mediums resolved. The run is finishing.
             </p>
           ) : (
             parked.map((p) => (

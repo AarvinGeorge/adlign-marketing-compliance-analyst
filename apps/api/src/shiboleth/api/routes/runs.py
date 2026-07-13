@@ -29,7 +29,8 @@ router = APIRouter()
 
 class CheckRequest(BaseModel):
     product_id: str
-    mode: str = "corpus"  # live arrives at M6
+    mode: str = "corpus"
+    page_cap: int = 20  # per marketing medium (semantic discovery top-N)
 
 
 def _pipeline_deps(settings):
@@ -40,50 +41,70 @@ def _pipeline_deps(settings):
             groq_labeler(settings.model_for("cluster_label")))
 
 
+async def _auto_group(app, run_id: str) -> None:
+    """grouping-as-a-view: runs arrive pre-grouped; NEVER fails the run."""
+    try:
+        from shiboleth.pipeline.nodes.issues import (production_adjudicator,
+                                                     production_signer)
+        from shiboleth.services.issues import suggest_issues_for_run
+
+        model = app.state.settings.model_for("issue")
+        async with app.state.session_factory() as session:
+            await suggest_issues_for_run(
+                session, run_id,
+                production_signer(model), production_adjudicator(model))
+    except Exception as exc:  # noqa: BLE001 — non-fatal by contract
+        print(f"issue auto-suggest skipped: {type(exc).__name__}: {exc}")
+
+
+def _track(app, coro) -> None:
+    run_task = asyncio.create_task(coro)
+    app.state.live_tasks = getattr(app.state, "live_tasks", set())
+    app.state.live_tasks.add(run_task)
+    run_task.add_done_callback(app.state.live_tasks.discard)
+
+
 @router.post("/checks")
 async def start_check(body: CheckRequest, request: Request) -> dict:
+    """BOTH modes are background tasks (2026-07-13: a corpus re-run after a
+    harness change refills the LLM cache — minutes of live calls — and a
+    synchronous request made the UI look broken while the server quietly
+    finished). The caller gets {run_id, status: started} immediately and
+    watches progress via the run events."""
     app = request.app
     invoke, labeler = _pipeline_deps(app.state.settings)
 
     if body.mode == "corpus":
         from shiboleth.pipeline.corpus_run import run_corpus
 
-        async with app.state.session_factory() as session:
-            run_id = await run_corpus(session, invoke, labeler,
-                                      product_id=body.product_id)
-        # grouping-as-a-view (2026-07-13): runs arrive pre-grouped; failure
-        # here must never fail the run (the UI also self-heals on load)
-        try:
-            from shiboleth.pipeline.nodes.issues import (
-                production_adjudicator, production_signer)
-            from shiboleth.services.issues import suggest_issues_for_run
-
-            model = app.state.settings.model_for("issue")
+        async def corpus_task():
             async with app.state.session_factory() as session:
-                await suggest_issues_for_run(
-                    session, run_id,
-                    production_signer(model), production_adjudicator(model))
-        except Exception as exc:  # noqa: BLE001 — non-fatal by contract
-            print(f"issue auto-suggest skipped: {type(exc).__name__}: {exc}")
-        return {"run_id": run_id}
+                run_id = await run_corpus(session, invoke, labeler,
+                                          product_id=body.product_id)
+            await _auto_group(app, run_id)
 
-    # live (07 §3 S1): the run row is created + committed HERE so the caller
-    # gets its id immediately; one in-process async task then owns ingest.
-    # The barrier may park it as awaiting_input; paste/skip endpoints resume.
+        _track(app, corpus_task())
+        return {"status": "started", "mode": "corpus"}
+
+    # live: run row created + committed HERE so the caller gets its id
+    # immediately; one async task owns ingest (semantic discovery when the
+    # site has a sitemap) -> checking -> clusters -> auto-grouping. Mediums
+    # are optional; failures auto-skip; no awaiting_input barrier.
     from shiboleth.pipeline.live_run import create_live_run, start_live_run
+    from shiboleth.services.ingestion.discovery import production_ranker
 
     async with app.state.session_factory() as session:
         run_id = await create_live_run(session, body.product_id)
+    ranker = production_ranker(app.state.settings.model_for("discover"))
 
-    async def task():
+    async def live_task():
         async with app.state.session_factory() as session:
             await start_live_run(session, invoke, labeler,
-                                 product_id=body.product_id, run_id=run_id)
+                                 product_id=body.product_id, run_id=run_id,
+                                 cap=body.page_cap, ranker=ranker)
+        await _auto_group(app, run_id)
 
-    run_task = asyncio.create_task(task())
-    app.state.live_tasks = getattr(app.state, "live_tasks", set())
-    app.state.live_tasks.add(run_task)
-    run_task.add_done_callback(app.state.live_tasks.discard)
+    _track(app, live_task())
     return {"run_id": run_id, "status": "started"}
 
 
@@ -97,6 +118,31 @@ class SkipRequest(BaseModel):
     # PasteRequest here made text required -> 422 -> inescapable paste dialog
     # (blocked website-only analysis; Aarvin 2026-07-10).
     property_id: str
+
+
+@router.delete("/runs/{run_id}")
+async def delete_run(run_id: str, request: Request) -> dict:
+    """Delete a check run and ALL its records: events, flags, clusters,
+    inventory, then the run row. Shared page snapshots (materials) are
+    content-addressed and shared across runs, so they survive — deleting
+    one run must never orphan another run's evidence."""
+    from fastapi import HTTPException
+    from sqlalchemy import delete as sql_delete
+
+    from shiboleth.db.models import Cluster, Event, Flag, Run, RunInventory
+
+    async with request.app.state.session_factory() as session:
+        run = await session.get(Run, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=f"run {run_id} not found")
+        await session.execute(sql_delete(Event).where(Event.run_id == run_id))
+        await session.execute(sql_delete(Flag).where(Flag.run_id == run_id))
+        await session.execute(sql_delete(Cluster).where(Cluster.run_id == run_id))
+        await session.execute(
+            sql_delete(RunInventory).where(RunInventory.run_id == run_id))
+        await session.delete(run)
+        await session.commit()
+    return {"deleted": run_id}
 
 
 class IssueStateRequest(BaseModel):

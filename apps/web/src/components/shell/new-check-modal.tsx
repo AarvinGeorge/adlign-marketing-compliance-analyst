@@ -1,9 +1,12 @@
 // meta: U3 New check modal (client Dialog, not a route). Product create-or-pick
 // (list via useProducts, all API-backed), freeform links textarea with detected
-// PropertyChips (deterministic client-side extraction), crawl selects. Submit
-// runs a LIVE check: create-new POSTs /products with the chips as properties
-// then POSTs /checks {mode: live}; existing product POSTs /checks {mode: live}.
-// On success the modal closes and product queries invalidate so the card shows.
+// medium chips (deterministic client-side extraction), and a single
+// "Pages per medium" cap (semantic discovery top-N; crawl depth and post
+// timeframe are gone with the ingestion redesign). Submit runs a LIVE check:
+// create-new POSTs /products with the chips as mediums then POSTs /checks
+// {mode: live, page_cap}; existing product POSTs /checks {mode: live,
+// page_cap}. On success the modal closes and product queries invalidate.
+// Display vocabulary: "marketing mediums" (code identifiers keep property_*).
 
 "use client";
 
@@ -49,9 +52,7 @@ export function NewCheckModal({ children }: { children: React.ReactNode }) {
   const [newName, setNewName] = useState("");
   const [linksText, setLinksText] = useState("");
   const [removed, setRemoved] = useState<Set<string>>(new Set());
-  const [depth, setDepth] = useState("2");
   const [pageCap, setPageCap] = useState("20");
-  const [timeframe, setTimeframe] = useState("Feb 1 to Mar 31");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -90,14 +91,22 @@ export function NewCheckModal({ children }: { children: React.ReactNode }) {
   function startCheck() {
     setSubmitting(true);
     setSubmitError(null);
+    const cap = Number(pageCap);
     if (isNew) {
       createAndCheck.mutate(
-        { name: newName.trim(), properties: chipsToProperties(chips) },
+        {
+          name: newName.trim(),
+          properties: chipsToProperties(chips),
+          pageCap: cap,
+        },
         { onSuccess: done, onError: fail }
       );
       return;
     }
-    startCheckMutation.mutate(selectedId, { onSuccess: done, onError: fail });
+    startCheckMutation.mutate(
+      { productId: selectedId, pageCap: cap },
+      { onSuccess: done, onError: fail }
+    );
   }
 
   return (
@@ -145,11 +154,11 @@ export function NewCheckModal({ children }: { children: React.ReactNode }) {
             ) : null}
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label className="text-[13px]">Marketing properties</Label>
+            <Label className="text-[13px]">Marketing mediums</Label>
             <Textarea
               value={linksText}
               onChange={(e) => setLinksText(e.target.value)}
-              placeholder="Paste links or describe the properties, e.g. check turbotax.intuit.com plus our socials facebook.com/turbotax and instagram.com/turbotax"
+              placeholder="Paste links or describe the mediums, e.g. check turbotax.intuit.com plus our socials facebook.com/turbotax and instagram.com/turbotax"
               className="min-h-[76px] text-[13px]"
             />
             {chips.length > 0 ? (
@@ -170,58 +179,26 @@ export function NewCheckModal({ children }: { children: React.ReactNode }) {
               </div>
             ) : null}
           </div>
-          <div className="flex items-start gap-2.5">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">
-                Crawl depth
-              </Label>
-              <Select value={depth} onValueChange={setDepth}>
-                <SelectTrigger size="sm" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["1", "2", "3"].map((d) => (
-                    <SelectItem key={d} value={d}>
-                      {d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">Page cap</Label>
-              <Select value={pageCap} onValueChange={setPageCap}>
-                <SelectTrigger size="sm" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["10", "20", "50"].map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-[1.4] flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">
-                Posts from
-              </Label>
-              <Select value={timeframe} onValueChange={setTimeframe}>
-                <SelectTrigger size="sm" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["Feb 1 to Mar 31", "Last 30 days", "Last 90 days"].map(
-                    (t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">
+              Pages per medium
+            </Label>
+            <Select value={pageCap} onValueChange={setPageCap}>
+              <SelectTrigger size="sm" className="w-[130px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["10", "20", "50"].map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              The most rule-relevant pages, found by semantic search against
+              your scorecard.
+            </p>
           </div>
         </div>
         <DialogFooter className="border-t border-border pt-3">

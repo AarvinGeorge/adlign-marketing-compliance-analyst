@@ -20,6 +20,7 @@ import {
 } from "@tanstack/react-query";
 import {
   ApiError,
+  deleteRunApi,
   deleteScorecardCheck,
   deleteScorecardRule,
   getMetricsApi,
@@ -311,6 +312,15 @@ function buildSummary(
       kind: p.kind,
       label: shortHandle(p.kind, p.url_or_handle),
     }));
+  // mediums the run auto-skipped (ingestion redesign: failed or social
+  // fetches never park a run; they skip with a quiet note instead).
+  const skipped: ParkedProperty[] = (detail?.properties ?? [])
+    .filter((p) => propStatus[p.id] === "skipped")
+    .map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      label: shortHandle(p.kind, p.url_or_handle),
+    }));
 
   let uiStatus: ProductSummary["status"];
   if (status === "running") uiStatus = "running";
@@ -320,7 +330,7 @@ function buildSummary(
   let note = "";
   if (uiStatus === "running") note = "Live check in progress.";
   else if (uiStatus === "awaiting_input")
-    note = `Waiting on content for ${parked.length} ${parked.length === 1 ? "property" : "properties"}.`;
+    note = `Waiting on content for ${parked.length} ${parked.length === 1 ? "medium" : "mediums"}.`;
   else if (detail)
     note = `${flags.length} flags in ${clusterCount} ${clusterCount === 1 ? "cluster" : "clusters"} from the latest run.`;
 
@@ -354,6 +364,7 @@ function buildSummary(
         ? { fetched, cap: detail?.scores?.config?.cap ?? 20 }
         : null,
     parked,
+    skipped,
   };
 }
 
@@ -938,33 +949,54 @@ export function useDeleteCheck() {
 // New-check flows (live) + paste/skip
 // ---------------------------------------------------------------------------
 
-/** Live check for an existing product. */
+/** Live check for an existing product. pageCap = semantic-discovery top-N
+ *  per marketing medium (server default 20 when omitted). */
 export function useStartCheck() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (productId: string) => postCheck(productId, "live"),
-    onSuccess: (_res, productId) => {
+    mutationFn: (input: { productId: string; pageCap?: number }) =>
+      postCheck(input.productId, "live", input.pageCap),
+    onSuccess: (_res, input) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      queryClient.invalidateQueries({ queryKey: ["product", productId] });
+      queryClient.invalidateQueries({ queryKey: ["product", input.productId] });
       queryClient.invalidateQueries({ queryKey: ["metrics"] });
     },
   });
 }
 
-/** Create a product from the modal chips, then start a live check on it. */
+/** Create a product from the modal chips, then start a live check on it.
+ *  run_id may be absent (corpus mode background task); live returns it. */
 export function useCreateProductAndCheck() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
       name: string;
       properties: NewPropertyInput[];
+      pageCap?: number;
     }) => {
-      const created = await postCreateProduct(input);
-      const run = await postCheck(created.id, "live");
-      return { id: created.id, run_id: run.run_id };
+      const created = await postCreateProduct({
+        name: input.name,
+        properties: input.properties,
+      });
+      const run = await postCheck(created.id, "live", input.pageCap);
+      return { id: created.id, run_id: run.run_id ?? null };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["metrics"] });
+    },
+  });
+}
+
+/** DELETE /runs/{id}: permanent removal of a check run and all its flags,
+ *  clusters and events. Refreshes every surface that shows run data. */
+export function useDeleteRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => deleteRunApi(runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["product"] });
       queryClient.invalidateQueries({ queryKey: ["metrics"] });
     },
   });
