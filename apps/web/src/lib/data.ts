@@ -24,11 +24,14 @@ import {
   getProductDetailApi,
   getProductsApi,
   getRunEventsApi,
+  patchIssueState,
   postCheck,
   postCreateProduct,
   postDisposition,
+  postIssueSuggestions,
   postPasteContent,
   postSkipProperty,
+  type ApiCluster,
   type ApiFlag,
   type ApiMetric,
   type ApiProductDetail,
@@ -350,10 +353,22 @@ function buildSummary(
 // U6 / U7 product view
 // ---------------------------------------------------------------------------
 
+// Cluster tree for the U6 cluster surface (clustering C3). kind="wording" =
+// the deterministic exact-wording clusters (members empty); kind="issue" =
+// an AI-suggested parent grouping wording clusters into one analyst decision
+// (members carry the nested wording clusters). Rejected parents never reach
+// the UI; their children come back as top-level wording clusters.
+export interface ClusterView extends ClusterFixture {
+  kind: "wording" | "issue";
+  state: "auto" | "suggested" | "confirmed" | "rejected";
+  rationale: string | null;
+  members: ClusterView[];
+}
+
 export interface ProductView {
   summary: ProductSummary | undefined;
   metrics: MetricFixture[];
-  clusters: ClusterFixture[];
+  clusters: ClusterView[];
   views: FlagView[];
   isLoading: boolean;
   apiDown: boolean;
@@ -425,13 +440,11 @@ function buildProductView(
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(v);
   }
-  const clusters: ClusterFixture[] = [...groups.entries()]
-    .sort((a, b) => {
-      if (a[0] === "unclustered") return 1;
-      if (b[0] === "unclustered") return -1;
-      return b[1].length - a[1].length;
-    })
-    .map(([key, members]) => {
+  const apiClusters: ApiCluster[] = detail.clusters ?? [];
+  const metaById = new Map(apiClusters.map((c) => [c.id, c]));
+
+  const wordingViews: ClusterView[] = [...groups.entries()].map(
+    ([key, members]) => {
       const apiLabel =
         key === "unclustered"
           ? "Not yet clustered"
@@ -450,8 +463,75 @@ function buildProductView(
         sourceLine: `${ruleIds} · ${members.length} ${members.length === 1 ? "flag" : "flags"}`,
         dominantTag: dominant ?? members[0].flag.verdicts.intersection_tag,
         flagIds: members.map((v) => v.flag.id),
+        kind: "wording" as const,
+        state: (metaById.get(key)?.state ?? "auto") as ClusterView["state"],
+        rationale: null,
+        members: [],
       };
+    }
+  );
+
+  // Issue parents (clustering C3): membership follows the LIVE parent
+  // pointers, so a rejected parent (children detached server-side) drops
+  // out and its wording clusters return to top level automatically.
+  const activeParents = apiClusters.filter(
+    (c) =>
+      c.kind === "issue" &&
+      (c.state === "suggested" || c.state === "confirmed")
+  );
+  const parentIds = new Set(activeParents.map((c) => c.id));
+  const parentOf = (id: string): string | null => {
+    const pid = metaById.get(id)?.parent_cluster_id ?? null;
+    return pid !== null && parentIds.has(pid) ? pid : null;
+  };
+
+  const issueViews: ClusterView[] = activeParents
+    .map((p): ClusterView | null => {
+      const members = wordingViews
+        .filter((w) => parentOf(w.id) === p.id)
+        .sort((a, b) => b.flagIds.length - a.flagIds.length);
+      if (members.length === 0) return null;
+      const memberFlags = members.flatMap(
+        (m) => groups.get(m.id) ?? ([] as FlagView[])
+      );
+      const ruleIds = [
+        ...new Set(memberFlags.map((v) => ruleIdOf(v.flag.check_id))),
+      ].join(", ");
+      const dominant = members
+        .map((m) => m.dominantTag)
+        .sort((a, b) => TAG_RANK[a] - TAG_RANK[b])[0];
+      const flagIds = members.flatMap((m) => m.flagIds);
+      return {
+        id: p.id,
+        productId: detail.product.id,
+        label: p.label,
+        sourceLine: `${ruleIds} · ${flagIds.length} ${flagIds.length === 1 ? "flag" : "flags"} in ${members.length} clusters`,
+        dominantTag: dominant,
+        flagIds,
+        kind: "issue" as const,
+        state: p.state,
+        rationale: p.rationale,
+        members,
+      };
+    })
+    .filter((v): v is ClusterView => v !== null)
+    .sort((a, b) =>
+      a.state === b.state
+        ? b.flagIds.length - a.flagIds.length
+        : a.state === "suggested"
+          ? -1
+          : 1
+    );
+
+  const topWording = wordingViews
+    .filter((w) => parentOf(w.id) === null)
+    .sort((a, b) => {
+      if (a.id === "unclustered") return 1;
+      if (b.id === "unclustered") return -1;
+      return b.flagIds.length - a.flagIds.length;
     });
+
+  const clusters: ClusterView[] = [...issueViews, ...topWording];
 
   const summary = buildSummary(
     {
@@ -705,6 +785,38 @@ export function useDisposition(productId: string) {
             : err.detail
           : "The API is unreachable.";
       setError(input.flagId, message);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Issue grouping mutations (clustering C3)
+// ---------------------------------------------------------------------------
+
+/** POST /runs/{run_id}/issue-suggestions, then refetch the product so the
+ *  new SUGGESTED parents render. The API is idempotent; an empty array is
+ *  the honest "no new groupings" answer, not an error. */
+export function useSuggestIssues(productId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => postIssueSuggestions(runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product", productId] });
+    },
+  });
+}
+
+/** PATCH /clusters/{id}/issue-state: the analyst's accept/keep-separate
+ *  decision on a suggested grouping. */
+export function useIssueState(productId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      clusterId: string;
+      state: "confirmed" | "rejected";
+    }) => patchIssueState(input.clusterId, input.state),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product", productId] });
     },
   });
 }

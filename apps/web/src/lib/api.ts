@@ -112,11 +112,26 @@ export interface ApiProperty {
   config: Record<string, unknown>;
 }
 
+// Cluster rows of the latest run (additive, clustering C2). kind="wording" =
+// deterministic exact-wording clusters; kind="issue" = AI-suggested parents
+// grouping wording clusters into one analyst decision. member_cluster_ids is
+// present only on issue parents (from member_snapshot).
+export interface ApiCluster {
+  id: string;
+  label: string;
+  kind: "wording" | "issue";
+  state: "auto" | "suggested" | "confirmed" | "rejected";
+  rationale: string | null;
+  parent_cluster_id: string | null;
+  member_cluster_ids?: string[];
+}
+
 export interface ApiProductDetail {
   product: { id: string; name: string; status: string };
   properties: ApiProperty[];
   scores: ApiScores | null;
   flags: ApiFlag[];
+  clusters?: ApiCluster[]; // optional: older payloads lack it
   run_id?: string | null;
   model_config?: { check?: string } | null;
 }
@@ -201,6 +216,36 @@ export function postPasteContent(
   return fetchJson<{ run_id: string; status: string }>(
     `/runs/${runId}/paste-content`,
     { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
+// POST /runs/{run_id}/issue-suggestions (clustering C2). Idempotent on the
+// API side: already-parented clusters and rejected snapshots are skipped, so
+// an empty array means "no new groupings", never an error.
+export interface ApiIssueSuggestion {
+  id: string;
+  label: string;
+  state: string;
+  rationale: string;
+  member_cluster_ids: string[];
+  signatures: string[];
+}
+
+export function postIssueSuggestions(
+  runId: string
+): Promise<ApiIssueSuggestion[]> {
+  return fetchJson<ApiIssueSuggestion[]>(`/runs/${runId}/issue-suggestions`, {
+    method: "POST",
+  });
+}
+
+export function patchIssueState(
+  clusterId: string,
+  state: "confirmed" | "rejected"
+): Promise<{ id: string; state: string }> {
+  return fetchJson<{ id: string; state: string }>(
+    `/clusters/${clusterId}/issue-state`,
+    { method: "PATCH", body: JSON.stringify({ state }) }
   );
 }
 

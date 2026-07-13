@@ -4,9 +4,13 @@ meta:
            renders: product, properties, latest run scores, flags with
            verdicts + cluster labels.
   contract: GET /products; GET /products/{id} -> {product, properties, scores,
-            flags[]}. Each flag carries source_url (materials.ref, the clean
-            per-page URL) for the "view original source" link. Read-only;
-            disposition lives in flags.py.
+            flags[], clusters[]}. Each flag carries source_url (materials.ref,
+            the clean per-page URL) for the "view original source" link.
+            clusters[] (additive, clustering C2) serializes the run's cluster
+            rows incl. the issue layer: kind, state, rationale,
+            parent_cluster_id, and member_cluster_ids for issue parents.
+            Read-only; disposition lives in flags.py, issue confirm/reject
+            in runs.py.
   deps: db models only.
 """
 
@@ -54,6 +58,7 @@ async def product_detail(product_id: str, request: Request) -> dict:
         )).scalar_one_or_none()
         flags: list[dict] = []
         clusters: dict[str, str] = {}
+        cluster_payloads: list[dict] = []
         if latest:
             rows = (await session.execute(
                 select(Flag).where(Flag.run_id == latest.id)
@@ -62,6 +67,20 @@ async def product_detail(product_id: str, request: Request) -> dict:
                 select(Cluster).where(Cluster.run_id == latest.id)
             )).scalars().all()
             clusters = {c.id: c.label for c in cluster_rows}
+            # additive cluster payloads (clustering C2): the UI needs the
+            # issue layer (suggested/confirmed parents + membership) which
+            # flag rows alone cannot carry (issue parents own no flags).
+            for c in cluster_rows:
+                entry = {
+                    "id": c.id, "label": c.label, "kind": c.kind,
+                    "state": c.state, "rationale": c.rationale,
+                    "parent_cluster_id": c.parent_cluster_id,
+                }
+                if c.kind == "issue":
+                    entry["member_cluster_ids"] = (
+                        (c.member_snapshot or {}).get("member_cluster_ids", [])
+                    )
+                cluster_payloads.append(entry)
             # materials.ref is the clean per-page source URL (flags.location is
             # a display string that may be a corpus page id, not a URL); the
             # "view original source" button needs the real URL.
@@ -101,6 +120,7 @@ async def product_detail(product_id: str, request: Request) -> dict:
             ],
             "scores": scores,
             "flags": flags,
+            "clusters": cluster_payloads,
         }
 
 
