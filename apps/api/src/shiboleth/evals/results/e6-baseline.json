@@ -1,0 +1,60 @@
+{
+ "accuracy": 0.8333,
+ "precision_same": 0.7778,
+ "recall_same": 1.0,
+ "n_pairs": 12,
+ "tp": 7,
+ "fp": 2,
+ "fn": 0,
+ "tn": 3,
+ "model": "anthropic:claude-haiku-4-5",
+ "run_seconds": 55.2,
+ "misses": [
+  {
+   "id": "E6-03",
+   "want": false,
+   "got": true,
+   "detail": {
+    "sig_a": {
+     "violation_mode": "missing_disclosure",
+     "subject": "free filing claim",
+     "rationale": "Marketing material claims free filing without disclosing material limitations, conditions, or applicable fees that may apply."
+    },
+    "sig_b": {
+     "violation_mode": "missing_disclosure",
+     "subject": "free tax filing eligibility qualification",
+     "rationale": "Marketing claims free filing availability without disclosing specific eligibility criteria or limitations that restrict access to the stated percentage of taxpayers."
+    },
+    "decided_by": "adjudicator",
+    "verdict": {
+     "same_issue": true,
+     "label": "Free filing claim missing eligibility disclosure",
+     "rationale": "Both clusters involve the same underlying compliance failure: making a \"free filing\" claim without adequately disclosing eligibility limitations. Cluster 1 makes an unqualified free claim; Cluster 2 acknowledges eligibility but fails to disclose it prominently with the claim. Same obligation, same product, same failure mode."
+    }
+   }
+  },
+  {
+   "id": "E6-10",
+   "want": false,
+   "got": true,
+   "detail": {
+    "sig_a": {
+     "violation_mode": "missing_bonus_terms",
+     "subject": "$50 bonus offer",
+     "rationale": "Bonus amount is stated but specific terms and conditions are not disclosed, only referenced generically."
+    },
+    "sig_b": {
+     "violation_mode": "missing_bonus_terms",
+     "subject": "referral bonus offer terms",
+     "rationale": "Bonus offer lacks required terms such as minimum deposit amount, eligibility conditions, or timing restrictions."
+    },
+    "decided_by": "adjudicator",
+    "verdict": {
+     "same_issue": true,
+     "label": "Missing bonus offer terms and conditions",
+     "rationale": "Both clusters involve bonus offers ($50 and $25 referral) that lack required terms and conditions disclosure. They represent the same compliance failure under Rule R-04: incomplete bonus offer messaging that fails to clearly disclose material terms."
+    }
+   }
+  }
+ ]
+}

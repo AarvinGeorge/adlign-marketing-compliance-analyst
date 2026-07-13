@@ -85,6 +85,46 @@ class SkipRequest(BaseModel):
     property_id: str
 
 
+class IssueStateRequest(BaseModel):
+    state: str  # confirmed | rejected
+
+
+@router.post("/runs/{run_id}/issue-suggestions")
+async def suggest_issues(run_id: str, request: Request) -> list[dict]:
+    """Generate SUGGESTED issue groupings over this run's wording clusters
+    (clustering C1). Idempotent: already-parented clusters and rejected
+    snapshots are skipped, so re-calling never duplicates or re-suggests."""
+    from shiboleth.pipeline.nodes.issues import (production_adjudicator,
+                                                 production_signer)
+    from shiboleth.services.issues import suggest_issues_for_run
+
+    settings = request.app.state.settings
+    model = settings.model_for("issue")
+    async with request.app.state.session_factory() as session:
+        return await suggest_issues_for_run(
+            session, run_id,
+            production_signer(model), production_adjudicator(model))
+
+
+@router.patch("/clusters/{cluster_id}/issue-state")
+async def issue_state(cluster_id: str, body: IssueStateRequest,
+                      request: Request) -> dict:
+    """Analyst confirm/reject of a suggested issue grouping. Reject detaches
+    the wording clusters and remembers the grouping so it is never
+    re-suggested."""
+    from fastapi import HTTPException
+
+    from shiboleth.services.issues import set_issue_state
+
+    async with request.app.state.session_factory() as session:
+        try:
+            return await set_issue_state(session, cluster_id, body.state)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.post("/runs/{run_id}/paste-content")
 async def paste_content(run_id: str, body: PasteRequest, request: Request) -> dict:
     app = request.app

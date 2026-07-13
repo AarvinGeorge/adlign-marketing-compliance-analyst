@@ -1,0 +1,21 @@
+{
+  "_meta": {
+    "name": "E6 golden set: issue-grouping pairs",
+    "purpose": "Labeled pairs of flag evidence quotes: should the issue layer group them as ONE analyst decision? Authored 2026-07-13 from GT v2 + v1 finding classes by the compliance-expert role; grows via analyst confirm/reject dispositions on issue suggestions.",
+    "labels": "same_issue true = one disposition covers both; false = distinct problems"
+  },
+  "pairs": [
+    {"id": "E6-01", "rule_id": "R-01", "quote_a": "File 100% free with TurboTax. Simple returns only.", "quote_b": "File your taxes for $0 with TurboTax today.", "same_issue": true, "why": "identical obligation (free claim, no eligibility disclosure), wording differs"},
+    {"id": "E6-02", "rule_id": "R-01", "quote_a": "TurboTax Free Edition. Roughly 37% of taxpayers qualify.", "quote_b": "TurboTax Free Edition. About 37% of filers may qualify for free filing.", "same_issue": true, "why": "both drifted variants of the approved D-01 wording"},
+    {"id": "E6-03", "rule_id": "R-01", "quote_a": "File completely free, no catch.", "quote_b": "TurboTax Free Edition. Roughly 37% of taxpayers qualify.", "same_issue": false, "why": "missing disclosure vs drifted-but-present disclosure: different remediation"},
+    {"id": "E6-04", "rule_id": "R-01", "quote_a": "Declara tus impuestos totalmente gratis con TurboTax.", "quote_b": "File 100% free with TurboTax.", "same_issue": true, "why": "same bare free claim, Spanish vs English"},
+    {"id": "E6-05", "rule_id": "R-02", "quote_a": "0% interest on your refund advance loan.", "quote_b": "Borrow at just 2.9% monthly on approved refunds.", "same_issue": true, "why": "both state a rate without expressing it as APR"},
+    {"id": "E6-06", "rule_id": "R-02", "quote_a": "Private student loans tend to be more expensive with rates from 6-12%.", "quote_b": "A flat $39 loan fee applies to early refund access.", "same_issue": false, "why": "market-rate editorial comparison vs an undisclosed-fee cost statement"},
+    {"id": "E6-07", "rule_id": "R-03", "quote_a": "FDIC insurance up to $5 million through a network of participating banks.", "quote_b": "Your deposits are insured up to five million dollars via our partner bank network.", "same_issue": true, "why": "same overstated network-coverage formulation"},
+    {"id": "E6-08", "rule_id": "R-03", "quote_a": "FDIC insurance up to $5 million through a network of participating banks.", "quote_b": "Banking services provided by MVB Bank, Inc., Member FDIC.", "same_issue": false, "why": "overstated coverage vs missing required formulation entirely"},
+    {"id": "E6-09", "rule_id": "R-04", "quote_a": "Get a $50 bonus when you open a Credit Karma Money account.", "quote_b": "Earn $50 for opening your new account today.", "same_issue": true, "why": "same specific bonus offer missing the required term disclosures"},
+    {"id": "E6-10", "rule_id": "R-04", "quote_a": "Get a $50 bonus, terms apply.", "quote_b": "Refer a friend and you both get $25 after their first deposit.", "same_issue": false, "why": "account-opening bonus vs referral reward: distinct offers and terms"},
+    {"id": "E6-11", "rule_id": "R-01", "quote_a": "Start for $0 today. $0 federal, $0 state, $0 to file.", "quote_b": "Zero dollars. Zero hidden fees. File free.", "same_issue": true, "why": "same $0 filing claim family without disclosure"},
+    {"id": "E6-12", "rule_id": "R-03", "quote_a": "Open a checking account with no monthly fees.", "quote_b": "FDIC insurance up to $5 million through a network of banks.", "same_issue": false, "why": "fee marketing vs FDIC coverage misstatement"}
+  ]
+}

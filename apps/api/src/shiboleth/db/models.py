@@ -131,7 +131,18 @@ class Cluster(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"))
     label: Mapped[str] = mapped_column(String)
-    kind: Mapped[str] = mapped_column(String, default="wording")
+    kind: Mapped[str] = mapped_column(String, default="wording")  # wording | issue
+    # issue layer (additive, 2026-07-13): kind="issue" parents group wording
+    # clusters into one analyst decision; ALWAYS suggested first, a human
+    # confirms/rejects (never silent merges). member_snapshot preserves the
+    # suggested member ids even after rejection so a rejected grouping is
+    # never re-suggested (Sentry unmerge-memory behavior).
+    parent_cluster_id: Mapped[str | None] = mapped_column(
+        ForeignKey("clusters.id"), nullable=True
+    )
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    state: Mapped[str] = mapped_column(String, default="auto")  # auto | suggested | confirmed | rejected
+    member_snapshot: Mapped[dict] = mapped_column(JSONB, default=dict)
 
 
 class Flag(Base):

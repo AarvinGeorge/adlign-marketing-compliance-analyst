@@ -39,6 +39,9 @@ MODEL_STAGES: dict[str, tuple[str, str]] = {
     "check": ("DEFAULT_MODEL_CHECK", "anthropic:claude-haiku-4-5"),
     "cluster_label": ("DEFAULT_MODEL_CLUSTER_LABEL", "groq:llama-3.3-70b-versatile"),
     "report": ("DEFAULT_MODEL_REPORT", "groq:llama-3.3-70b-versatile"),
+    # issue layer (clustering C1): signer + adjudicator; Anthropic per
+    # Aarvin 2026-07-13, cheap tier — two short calls per wording cluster
+    "issue": ("DEFAULT_MODEL_ISSUE", "anthropic:claude-haiku-4-5"),
 }
 
 LANGSMITH_PROJECT_DEFAULT = "shiboleth-marketing-compliance-analyst-project"
