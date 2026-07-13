@@ -1,15 +1,19 @@
 // meta: U6 product detail (/products/[id]). API-backed via useProductView:
 // metric row computed from live scores + lifecycle overlay, flags list with
-// THREE groupings toggleable (by issue / by cluster / by property). Grouping
-// is a VIEW, not a decision (Gmail-threading pattern): AI issue groupings
-// render with the rationale always visible and a single reversible Ungroup
-// action with in-place Undo (PATCH /clusters/{id}/issue-state, rejected then
+// TWO groupings toggleable (by issue / by property; By cluster retired: the
+// wording clusters are fully visible inside By issue, nested when grouped,
+// flat when unparented). Grouping is a VIEW, not a decision (Gmail-threading
+// pattern): AI issue groupings render with the rationale always visible, a
+// scope line (root-cause hint from member flags' property/material data),
+// ISSUE-LEVEL Confirm all / Dismiss all (sequential client fan-out over every
+// open member flag through the SAME disposition mutation the member-level
+// bulk uses, with progress + partial-failure count), and a single reversible
+// Ungroup with in-place Undo (PATCH /clusters/{id}/issue-state, rejected then
 // suggested); no accept flow. A self-healing auto-trigger fires
 // POST /runs/{id}/issue-suggestions once for completed runs with wording
-// clusters but zero issue rows. Cluster bulk actions (sequential dispositions
-// against POST /flags/{id}/disposition), per-flag disposition via FlagRow,
-// lifecycle chips, three-tag verdicts. Demo products (404 from the API) fall
-// back to their fixture summaries with no flags.
+// clusters but zero issue rows. Per-flag disposition via FlagRow, lifecycle
+// chips, three-tag verdicts. Demo products (404 from the API) fall back to
+// their fixture summaries with no flags.
 
 "use client";
 
@@ -37,11 +41,10 @@ import { useFlagStore } from "@/lib/flag-store";
 import type { FlagState, IntersectionTag, PropertyKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type Grouping = "issue" | "cluster" | "property";
+type Grouping = "issue" | "property";
 
 const GROUPING_LABEL: Record<Grouping, string> = {
   issue: "By issue",
-  cluster: "By cluster",
   property: "By property",
 };
 
@@ -62,35 +65,29 @@ export default function ProductDetailPage({
   const {
     summary,
     metrics,
-    clusters,
     issueClusters,
+    wordingClusterCount,
     hasIssueRows,
     views,
     isLoading,
     apiDown,
   } = useProductView(id);
-  const [groupingChoice, setGroupingChoice] = useState<Grouping | null>(null);
+  const [grouping, setGrouping] = useState<Grouping>("issue");
   const [ungrouped, setUngrouped] = useState<UngroupedIssue[]>([]);
   const suggest = useSuggestIssues(id);
   const autoFired = useRef(false);
-
-  // By issue is the default whenever the run has AI groupings to show.
-  const hasIssueGroups = issueClusters.some((c) => c.kind === "issue");
-  const grouping: Grouping =
-    groupingChoice ?? (hasIssueGroups ? "issue" : "cluster");
 
   // Self-healing auto-suggest: runs that predate route-level auto-suggestion
   // have wording clusters but zero issue rows; generate once, silently.
   const runId = summary?.runId ?? null;
   const runSettled =
     summary?.status === "flagged" || summary?.status === "clear";
-  const wordingCount = clusters.filter((c) => c.id !== "unclustered").length;
   useEffect(() => {
     if (autoFired.current || !runId || !runSettled) return;
-    if (hasIssueRows || wordingCount < 2) return;
+    if (hasIssueRows || wordingClusterCount < 2) return;
     autoFired.current = true;
     suggest.mutate(runId); // silent on failure by design
-  }, [runId, runSettled, hasIssueRows, wordingCount, suggest]);
+  }, [runId, runSettled, hasIssueRows, wordingClusterCount, suggest]);
 
   if (isLoading) {
     return (
@@ -175,14 +172,14 @@ export default function ProductDetailPage({
         <>
           <div className="mb-3.5 flex items-center gap-3">
             <span className="flex-1 text-[13px] font-semibold">
-              {views.length} flags in {wordingCount} clusters
+              {views.length} flags in {wordingClusterCount} clusters
             </span>
             <div className="flex rounded-md bg-muted p-[3px]">
-              {(["issue", "cluster", "property"] as const).map((g) => (
+              {(["issue", "property"] as const).map((g) => (
                 <button
                   key={g}
                   type="button"
-                  onClick={() => setGroupingChoice(g)}
+                  onClick={() => setGrouping(g)}
                   className={cn(
                     "flex h-7 items-center whitespace-nowrap rounded-sm px-3 text-xs",
                     grouping === g
@@ -234,19 +231,6 @@ export default function ProductDetailPage({
                   />
                 )
               )}
-            </div>
-          ) : grouping === "cluster" ? (
-            <div className="flex flex-col gap-3.5">
-              {clusters.map((c) => (
-                <ClusterGroup
-                  key={c.id}
-                  label={c.label}
-                  sourceLine={c.sourceLine}
-                  dominantTag={c.dominantTag}
-                  views={memberViews(c, views)}
-                  productId={id}
-                />
-              ))}
             </div>
           ) : (
             <div className="flex flex-col gap-3.5">
@@ -379,11 +363,38 @@ function memberViews(c: ClusterView, views: FlagView[]): FlagView[] {
     .filter((v): v is FlagView => v !== undefined);
 }
 
+/** One-line root-cause hint from the member flags' real property/material
+ *  data: "41 pages on turbotax.intuit.com" or "across 2 properties · 41
+ *  pages". Counts distinct materials, never invents numbers. */
+function scopeLine(views: FlagView[]): string | null {
+  if (views.length === 0) return null;
+  const byProperty = new Map<string, FlagView>();
+  for (const v of views) {
+    if (!byProperty.has(v.property.id)) byProperty.set(v.property.id, v);
+  }
+  const pages = new Set(views.map((v) => v.material.id)).size;
+  if (byProperty.size === 1) {
+    const property = [...byProperty.values()][0].property;
+    const unit = property.kind === "website" ? "page" : "post";
+    const place =
+      property.kind === "website"
+        ? property.url_or_handle
+            .replace(/^https?:\/\//, "")
+            .replace(/\/.*$/, "")
+        : property.url_or_handle;
+    return `${pages} ${pages === 1 ? unit : `${unit}s`} on ${place}`;
+  }
+  return `across ${byProperty.size} properties · ${pages} ${pages === 1 ? "page" : "pages"}`;
+}
+
 /** An AI issue grouping (suggested and confirmed render identically:
  *  grouping is a view, not a decision). The rationale is always in plain
- *  sight (the explainability contract: the analyst must see WHY it grouped);
- *  the only action is a reversible Ungroup. Member wording clusters render
- *  nested inside with their own rows and bulk actions. */
+ *  sight (the explainability contract: the analyst must see WHY it grouped).
+ *  Header actions: ISSUE-LEVEL Confirm all / Dismiss all (the analyst's
+ *  close-the-batch move; sequential fan-out over every open member flag via
+ *  the same disposition mutation as member-level bulk) and a reversible
+ *  Ungroup. Member wording clusters render nested inside with their own
+ *  rows and bulk actions for granular exceptions. */
 function IssueClusterGroup({
   cluster,
   views,
@@ -396,8 +407,46 @@ function IssueClusterGroup({
   onUngrouped: () => void;
 }) {
   const issueState = useIssueState(productId);
+  const lifecycles = useFlagStore((s) => s.lifecycles);
+  const disposition = useDisposition(productId);
   const [expanded, setExpanded] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [bulkRun, setBulkRun] = useState<{
+    action: "confirm" | "dismiss";
+    done: number;
+    total: number;
+  } | null>(null);
+
+  const allViews = useMemo(() => memberViews(cluster, views), [cluster, views]);
+  const openIds = allViews
+    .filter((v) => (lifecycles[v.flag.id]?.state ?? v.flag.state) === "open")
+    .map((v) => v.flag.id);
+  const scope = scopeLine(allViews);
+  const busy = bulkRun !== null || issueState.isPending;
+
+  async function bulk(action: "confirm" | "dismiss") {
+    // Same semantics as member-level bulk: sequential keeps the API and
+    // verified-score recompute orderly; per-flag errors also surface inline
+    // via the store on each row.
+    setError(null);
+    const ids = openIds;
+    let failed = 0;
+    setBulkRun({ action, done: 0, total: ids.length });
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await disposition.mutateAsync({ flagId: ids[i], action });
+      } catch {
+        failed += 1;
+      }
+      setBulkRun({ action, done: i + 1, total: ids.length });
+    }
+    setBulkRun(null);
+    if (failed > 0) {
+      setError(
+        `${failed} of ${ids.length} flags could not be ${action === "confirm" ? "confirmed" : "dismissed"}`
+      );
+    }
+  }
 
   async function ungroup() {
     setError(null);
@@ -431,13 +480,50 @@ function IssueClusterGroup({
           </span>
           <span className="text-xs text-muted-foreground">
             <SourceLine text={cluster.sourceLine} />
+            {scope ? <> · {scope}</> : null}
           </span>
         </div>
+        {openIds.length > 0 || bulkRun ? (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              disabled={busy}
+              onClick={() => bulk("dismiss")}
+            >
+              {bulkRun?.action === "dismiss" ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {bulkRun.done} of {bulkRun.total}
+                </>
+              ) : (
+                "Dismiss all"
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={busy}
+              onClick={() => bulk("confirm")}
+            >
+              {bulkRun?.action === "confirm" ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {bulkRun.done} of {bulkRun.total}
+                </>
+              ) : (
+                `Confirm all ${openIds.length}`
+              )}
+            </Button>
+          </>
+        ) : null}
         <Button
           variant="ghost"
           size="sm"
           className="text-muted-foreground"
-          disabled={issueState.isPending}
+          disabled={busy}
           onClick={ungroup}
         >
           {issueState.isPending ? (

@@ -370,10 +370,13 @@ export interface ClusterView extends ClusterFixture {
 export interface ProductView {
   summary: ProductSummary | undefined;
   metrics: MetricFixture[];
-  /** Flat wording clusters, exactly the pre-issue-layer list (By cluster). */
-  clusters: ClusterView[];
-  /** Issue tree: AI-grouped parents first, unparented flat below (By issue). */
+  /** Issue tree: AI-grouped parents first, unparented flat below (By issue).
+   *  The retired By cluster view's flat list is gone; wording clusters are
+   *  fully visible here (nested when grouped, flat otherwise). */
   issueClusters: ClusterView[];
+  /** Real wording clusters in the run (excludes the unclustered bucket);
+   *  drives the count line and the auto-suggest threshold. */
+  wordingClusterCount: number;
   /** Any issue row in the payload, INCLUDING rejected ones. Guards the
    *  self-healing auto-suggest so a refused grouping is never re-fired. */
   hasIssueRows: boolean;
@@ -415,8 +418,8 @@ export function useProductView(productId: string): ProductView {
     return {
       summary: undefined,
       metrics: [],
-      clusters: [],
       issueClusters: [],
+      wordingClusterCount: 0,
       hasIssueRows: false,
       views: [],
       isLoading: q.isLoading,
@@ -431,7 +434,12 @@ function buildProductView(
   lifecycles: Record<string, FlagLifecycle>
 ): Pick<
   ProductView,
-  "summary" | "metrics" | "clusters" | "issueClusters" | "hasIssueRows" | "views"
+  | "summary"
+  | "metrics"
+  | "issueClusters"
+  | "wordingClusterCount"
+  | "hasIssueRows"
+  | "views"
 > {
   const propById = new Map(detail.properties.map((p) => [p.id, p]));
   const websiteProp =
@@ -541,10 +549,11 @@ function buildProductView(
     .filter((w) => parentOf(w.id) === null)
     .sort(byWeight);
 
-  // By cluster = the flat pre-issue-layer list (parents ignored entirely);
   // By issue = grouped parents first, then the unparented flat remainder.
-  const clusters: ClusterView[] = [...wordingViews].sort(byWeight);
   const issueClusters: ClusterView[] = [...issueViews, ...topWording];
+  const wordingClusterCount = wordingViews.filter(
+    (w) => w.id !== "unclustered"
+  ).length;
   const hasIssueRows = apiClusters.some((c) => c.kind === "issue");
 
   const summary = buildSummary(
@@ -564,8 +573,8 @@ function buildProductView(
   return {
     summary,
     metrics: buildMetrics(detail, lifecycles),
-    clusters,
     issueClusters,
+    wordingClusterCount,
     hasIssueRows,
     views,
   };
