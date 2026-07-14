@@ -26,7 +26,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 
-from shiboleth.db.models import Flag, Product, Property, Run, new_id
+from shiboleth.db.models import BinaryCheck, Flag, Product, Property, Rule, Run, new_id
 
 router = APIRouter()
 
@@ -52,6 +52,16 @@ async def _latest_runs(session) -> list[Run]:
     return runs
 
 
+async def rule_severity_by_check(session) -> dict[str, str]:
+    """check_id -> the owning rule's severity (the AI recommendation).
+    Effective severity everywhere = flags.severity_override ?? this."""
+    rows = (await session.execute(
+        select(BinaryCheck.id, Rule.severity)
+        .join(Rule, BinaryCheck.rule_id == Rule.id)
+    )).all()
+    return dict(rows)
+
+
 def needs_review_flag_ids(run: Run) -> set[str]:
     """Flag ids the run's persisted outcome rows mark needs_review (the
     checker declined to decide; excluded from the score denominator and NOT
@@ -71,6 +81,7 @@ async def compute_portfolio_metrics(session) -> dict:
     needs_review), so donut total and tile stay mutually consistent AND
     equal to what the product surfaces show."""
     latest = await _latest_runs(session)
+    rule_sev = await rule_severity_by_check(session)
     by_tag = {"unapproved_violation": 0, "drifted_but_compliant": 0,
               "needs_review": 0, "other": 0}
     by_severity = {"High": 0, "Medium": 0, "Low": 0}
@@ -92,7 +103,10 @@ async def compute_portfolio_metrics(session) -> dict:
             else:
                 by_tag["other"] += 1
             violations += 1
-            sev = _severity(f.check_id)
+            # effective severity: human override ?? rule recommendation
+            sev = (f.severity_override
+                   or rule_sev.get(f.check_id)
+                   or _severity(f.check_id))
             by_severity[sev if sev in by_severity else "Medium"] += 1
     return {
         "open_flags_total": open_total,

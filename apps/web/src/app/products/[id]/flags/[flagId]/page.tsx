@@ -124,6 +124,11 @@ export default function FlagDetailPage({
               team: flag.assigned_team,
               note: flag.note,
             }}
+            severity={{
+              effective: meta.severity,
+              recommended: meta.severityRecommended,
+              overridden: meta.severityOverridden,
+            }}
           />
         </div>
 

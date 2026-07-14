@@ -1,5 +1,6 @@
 // meta: FlagRow primitive (DESIGN.md): property icon, mono snippet + location,
-// VerdictTags (delta 2), then LifecycleChip or Dismiss/Confirm actions, and an
+// VerdictTags (delta 2) + the dropdown-editable FlagSeverityControl (per-flag
+// severity, 2026-07-14), then LifecycleChip or Dismiss/Confirm actions, and an
 // "Open ›" link to flag detail. Dispositions POST to the API via the
 // useDisposition mutation (optimistic through the flag store); a 409 or
 // network failure reverts the row and shows an inline error line. No Undo:
@@ -11,6 +12,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FlagSeverityControl } from "@/components/primitives/flag-severity-control";
 import { LifecycleChip } from "@/components/primitives/lifecycle-chip";
 import { PropertyIcon } from "@/components/primitives/property-chip";
 import { VerdictTags } from "@/components/primitives/verdict-tags";
@@ -86,7 +88,18 @@ export function FlagRow({
               {meta.explainer}
             </span>
           )}
-          {!dismissed ? <VerdictTags verdicts={flag.verdicts} /> : null}
+          {!dismissed ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <VerdictTags verdicts={flag.verdicts} />
+              <FlagSeverityControl
+                flagId={flag.id}
+                productId={productId}
+                effective={meta.severity}
+                recommended={meta.severityRecommended}
+                overridden={meta.severityOverridden}
+              />
+            </div>
+          ) : null}
           {error ? (
             <span className="text-xs font-medium text-danger-text">
               {error}

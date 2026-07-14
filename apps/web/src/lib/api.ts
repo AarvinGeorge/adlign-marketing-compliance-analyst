@@ -107,6 +107,11 @@ export interface ApiFlag {
   // "needs_review" = the checker declined to decide (not a violation);
   // otherwise "flag". Optional: legacy payloads lack it (treat as "flag").
   verdict_status?: "flag" | "needs_review";
+  // per-flag severity (2026-07-14): effective = human override ?? rule
+  // severity (the AI recommendation). Optional: legacy payloads lack them.
+  severity_effective?: "High" | "Medium" | "Low";
+  severity_recommended?: "High" | "Medium" | "Low";
+  severity_overridden?: boolean;
   verdicts: ApiVerdicts;
 }
 
@@ -224,6 +229,24 @@ export function postCheck(
       }),
     }
   );
+}
+
+/** PATCH /flags/{id}/severity: the human severity override. null resets to
+ *  the rule's recommendation. Audit event persisted server-side; scores and
+ *  outcome_rows are never rewritten. */
+export function patchFlagSeverity(
+  flagId: string,
+  severity: "High" | "Medium" | "Low" | null
+): Promise<{
+  id: string;
+  severity_effective: "High" | "Medium" | "Low";
+  severity_recommended: "High" | "Medium" | "Low";
+  severity_overridden: boolean;
+}> {
+  return fetchJson(`/flags/${flagId}/severity`, {
+    method: "PATCH",
+    body: JSON.stringify({ severity }),
+  });
 }
 
 /** DELETE /runs/{id}: removes the run and ALL its records (events, flags,

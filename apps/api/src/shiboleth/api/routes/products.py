@@ -94,11 +94,15 @@ async def product_detail(product_id: str, request: Request) -> dict:
                 source_urls = {mid: ref for mid, ref in mat_rows}
             # additive (metrics overhaul 2026-07-13): verdict_status lets the
             # UI apply ONE violation definition everywhere (needs_review is
-            # not a violation; it is its own donut slice).
-            from shiboleth.api.routes.metrics import needs_review_flag_ids
+            # not a violation; it is its own donut slice). Per-flag severity
+            # (2026-07-14): effective = human override ?? rule severity.
+            from shiboleth.api.routes.metrics import (needs_review_flag_ids,
+                                                      rule_severity_by_check)
 
             review_ids = needs_review_flag_ids(latest)
+            rule_sev = await rule_severity_by_check(session)
             for f in rows:
+                recommended = rule_sev.get(f.check_id, "Medium")
                 flags.append({
                     "id": f.id, "state": f.state, "assigned_team": f.assigned_team,
                     "note": f.note, "cluster_id": f.cluster_id,
@@ -108,6 +112,9 @@ async def product_detail(product_id: str, request: Request) -> dict:
                     "verdict_status": (
                         "needs_review" if f.id in review_ids else "flag"
                     ),
+                    "severity_recommended": recommended,
+                    "severity_effective": f.severity_override or recommended,
+                    "severity_overridden": f.severity_override is not None,
                     "verdicts": {
                         "check_id": f.check_id, "axis_a": f.axis_a,
                         "axis_b": f.axis_b, "intersection_tag": f.intersection_tag,

@@ -85,7 +85,9 @@ export interface FlagMeta {
   flagId: string;
   title: string; // short finding title (flag detail header)
   explainer: string; // one-line explainer under the tags
-  severity: Severity;
+  severity: Severity; // EFFECTIVE severity (human override ?? rule)
+  severityRecommended: Severity; // the AI recommendation (rule severity)
+  severityOverridden: boolean; // true when a human override is active
   foundAt: string;
   model: string;
   missingRequirement: string | null; // "required nearby, not found" callout

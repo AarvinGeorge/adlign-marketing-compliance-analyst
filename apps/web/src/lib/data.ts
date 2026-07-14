@@ -28,6 +28,7 @@ import {
   getProductsApi,
   getRunEventsApi,
   getScorecardApi,
+  patchFlagSeverity,
   patchIssueState,
   patchScorecardCheck,
   patchScorecardRule,
@@ -644,11 +645,15 @@ function toFlagView(f: ApiFlag, property: Property, model: string): FlagView {
     extracted_text: f.verdicts.evidence_quote,
     fetched_at: "",
   };
+  const recommendedSeverity =
+    f.severity_recommended ?? severityOf(f.verdicts.check_id);
   const meta: FlagMeta = {
     flagId: f.id,
     title: f.cluster_label ?? TAG_LABEL[tag],
     explainer: firstSentence(f.verdicts.reason),
-    severity: severityOf(f.verdicts.check_id),
+    severity: f.severity_effective ?? recommendedSeverity,
+    severityRecommended: recommendedSeverity,
+    severityOverridden: f.severity_overridden ?? false,
     foundAt: "latest run",
     model,
     missingRequirement: null,
@@ -713,7 +718,7 @@ function buildHero(
       byTag.other += 1;
     }
     openViolations += 1;
-    bySeverity[severityOf(f.verdicts.check_id)] += 1;
+    bySeverity[f.severity_effective ?? severityOf(f.verdicts.check_id)] += 1;
   }
   return {
     openTotal: open.length,
@@ -843,6 +848,27 @@ export function useIssueState(productId: string) {
     }) => patchIssueState(input.clusterId, input.state),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product", productId] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Per-flag severity override (2026-07-14)
+// ---------------------------------------------------------------------------
+
+/** PATCH /flags/{id}/severity. null = reset to the rule's recommendation.
+ *  Refetches the product (rows + hero recompute from severity_effective)
+ *  and /metrics (the dashboard tile picks the change up server-side). */
+export function useFlagSeverity(productId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      flagId: string;
+      severity: "High" | "Medium" | "Low" | null;
+    }) => patchFlagSeverity(input.flagId, input.severity),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product", productId] });
+      queryClient.invalidateQueries({ queryKey: ["metrics"] });
     },
   });
 }

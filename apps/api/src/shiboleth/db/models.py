@@ -168,6 +168,11 @@ class Flag(Base):
     state: Mapped[str] = mapped_column(String, default="open")  # lifecycle (04 §6e)
     assigned_team: Mapped[str | None] = mapped_column(String, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # per-flag severity increment (2026-07-14): NULL = inherit the rule's
+    # severity (the AI recommendation). Effective severity = override ??
+    # rule severity; affects display and metrics ONLY — persisted
+    # outcome_rows are never rewritten (audit trail).
+    severity_override: Mapped[str | None] = mapped_column(String, nullable=True)
     dispositioned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     modality: Mapped[str] = mapped_column(String, default="text")
     media_ref: Mapped[str | None] = mapped_column(String, nullable=True)

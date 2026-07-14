@@ -1,4 +1,6 @@
-// meta: U7 Disposition panel. Open: Dismiss / Confirm; Confirm opens the
+// meta: U7 Disposition panel. Heading row carries the dropdown-editable
+// FlagSeverityControl (per-flag severity, 2026-07-14). Open: Dismiss /
+// Confirm; Confirm opens the
 // assign strip (Social | Web | Growth | Legal + note + Assign/Cancel,
 // prototype 3g state 1). Actions POST /flags/{id}/disposition via the
 // useDisposition mutation (optimistic, reconciled with the server's
@@ -12,21 +14,28 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FlagSeverityControl } from "@/components/primitives/flag-severity-control";
 import { TEAMS } from "@/components/primitives/flag-row";
 import { LifecycleChip } from "@/components/primitives/lifecycle-chip";
 import { useFlagStore } from "@/lib/flag-store";
 import { useDisposition } from "@/lib/data";
 import { cn } from "@/lib/utils";
-import type { FlagState } from "@/lib/types";
+import type { FlagState, Severity } from "@/lib/types";
 
 export function DispositionPanel({
   flagId,
   productId,
   fallback,
+  severity,
 }: {
   flagId: string;
   productId: string;
   fallback: { state: FlagState; team: string | null; note: string | null };
+  severity?: {
+    effective: Severity;
+    recommended: Severity;
+    overridden: boolean;
+  };
 }) {
   const lifecycle = useFlagStore((s) => s.lifecycles[flagId]) ?? fallback;
   const error = useFlagStore((s) => s.errors[flagId]);
@@ -37,7 +46,18 @@ export function DispositionPanel({
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border px-5 py-4.5">
-      <span className="text-[13px] font-semibold">Disposition</span>
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] font-semibold">Disposition</span>
+        {severity ? (
+          <FlagSeverityControl
+            flagId={flagId}
+            productId={productId}
+            effective={severity.effective}
+            recommended={severity.recommended}
+            overridden={severity.overridden}
+          />
+        ) : null}
+      </div>
 
       {lifecycle.state === "open" ? (
         <>
