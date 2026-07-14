@@ -255,8 +255,11 @@ git push origin main
 - CAUTION: `POSTGRES_PASSWORD` in GitHub must stay equal to the password
   the pgdata volume was initialized with, or the api loses the DB. To
   change it, change it in Postgres first, then in the GitHub secret.
-- Frontend: Vercel project (scope `aarvingeorges-projects`), root directory
-  `apps/web`, env `NEXT_PUBLIC_API_URL=https://217.15.168.253.sslip.io/api`.
+- Frontend: Vercel project `marketing-compliance-analysis-tool` (scope
+  `aarvingeorges-projects`), live at
+  https://marketing-compliance-analysis-tool.vercel.app — the shareable
+  link. Root directory `apps/web`, env
+  `NEXT_PUBLIC_API_URL=https://217.15.168.253.sslip.io/api`.
   The browser calls the VPS API cross-origin; the API allows it via
   `CORS_ALLOW_ORIGINS` in the server `.env`.
 - The VPS keeps serving its own full copy (web + api) at the sslip.io
