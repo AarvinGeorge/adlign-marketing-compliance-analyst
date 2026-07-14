@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -74,8 +75,33 @@ async def _auto_group(app, run_id: str) -> None:
         print(f"issue auto-suggest skipped: {type(exc).__name__}: {exc}")
 
 
-def _track(app, coro) -> None:
-    run_task = asyncio.create_task(coro)
+async def _guarded(app, coro, run_id: str | None = None) -> None:
+    """Fail LOUD, never silent (2026-07-14; trace analysis found provider
+    hard failures — spend-cap 400s, 429s — killing the background task and
+    leaving the run row "running" forever, a zombie lane in the sidebar).
+    An unhandled failure marks the run failed and appends an "error" event
+    — the SSE stream's existing terminate type, so open streams end."""
+    try:
+        await coro
+    except Exception as exc:  # noqa: BLE001 — background task, no caller to raise to
+        print(f"run task failed: {type(exc).__name__}: {exc}")
+        if run_id is None:
+            return
+        async with app.state.session_factory() as session:
+            run = await session.get(Run, run_id)
+            if run is not None and run.status not in ("completed", "failed"):
+                run.status = "failed"
+                run.finished_at = datetime.now(UTC)
+                session.add(Event(
+                    run_id=run_id, node="graph", event_type="error",
+                    payload={"error": f"{type(exc).__name__}: {exc}"[:300]},
+                    ts=datetime.now(UTC),
+                ))
+                await session.commit()
+
+
+def _track(app, coro, run_id: str | None = None) -> None:
+    run_task = asyncio.create_task(_guarded(app, coro, run_id))
     app.state.live_tasks = getattr(app.state, "live_tasks", set())
     app.state.live_tasks.add(run_task)
     run_task.add_done_callback(app.state.live_tasks.discard)
@@ -128,7 +154,7 @@ async def start_check(body: CheckRequest, request: Request) -> dict:
                                  cap=cap, ranker=ranker)
         await _auto_group(app, run_id)
 
-    _track(app, live_task())
+    _track(app, live_task(), run_id=run_id)
     return {"run_id": run_id, "status": "started"}
 
 

@@ -626,7 +626,7 @@ function toFlagView(f: ApiFlag, property: Property, model: string): FlagView {
       evidence_quote: f.verdicts.evidence_quote,
       location: f.location,
       reason: f.verdicts.reason,
-      confidence: f.verdicts.confidence,
+      accuracy_measured: f.verdicts.accuracy_measured ?? null,
     },
   };
   // materials.ref (source_url) is the clean per-page URL; f.location is a
@@ -667,7 +667,7 @@ function toFlagView(f: ApiFlag, property: Property, model: string): FlagView {
         title: `Requirement check · ${f.verdicts.check_id} evaluated against the material`,
       },
       {
-        title: `Verdict · ${TAG_LABEL[tag]} at ${f.verdicts.confidence.toFixed(2)} confidence · ${model}`,
+        title: `Verdict · ${TAG_LABEL[tag]} · ${model}`,
         detail: f.verdicts.reason,
       },
     ],

@@ -57,11 +57,16 @@ async def override_severity(flag_id: str, body: SeverityOverride,
         flag = await session.get(Flag, flag_id)
         if flag is None:
             raise HTTPException(404, "flag not found")
-        recommended = (await session.execute(
+        from shiboleth.services.scoring.formulas import recommended_severity
+
+        rule_severity = (await session.execute(
             select(Rule.severity)
             .join(BinaryCheck, BinaryCheck.rule_id == Rule.id)
             .where(BinaryCheck.id == flag.check_id)
         )).scalar_one_or_none() or _severity(flag.check_id)
+        # matrix-aware (2026-07-14): a null reset lands on the matrix
+        # recommendation, not the bare rule severity
+        recommended = recommended_severity(rule_severity, flag.intersection_tag)
         previous_effective = flag.severity_override or recommended
         flag.severity_override = body.severity
         effective = body.severity or recommended

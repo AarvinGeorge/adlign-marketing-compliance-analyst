@@ -91,7 +91,10 @@ export interface ApiVerdicts {
   intersection_tag: IntersectionTag | "na";
   evidence_quote: string;
   reason: string;
-  confidence: number;
+  // GT v2 measured checker accuracy for this flag's rule; null = the rule
+  // has never been certified (custom rules) and renders "not yet measured".
+  // Replaces the LLM's self-reported confidence (uncalibrated, 2026-07-14).
+  accuracy_measured: { accuracy: number; source: string } | null;
 }
 
 export interface ApiFlag {

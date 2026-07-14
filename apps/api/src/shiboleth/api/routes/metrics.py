@@ -103,10 +103,13 @@ async def compute_portfolio_metrics(session) -> dict:
             else:
                 by_tag["other"] += 1
             violations += 1
-            # effective severity: human override ?? rule recommendation
-            sev = (f.severity_override
-                   or rule_sev.get(f.check_id)
-                   or _severity(f.check_id))
+            # effective severity: human override ?? matrix-aware
+            # recommendation (2026-07-14: drift recommends Low)
+            from shiboleth.services.scoring.formulas import recommended_severity
+
+            sev = f.severity_override or recommended_severity(
+                rule_sev.get(f.check_id) or _severity(f.check_id),
+                f.intersection_tag)
             by_severity[sev if sev in by_severity else "Medium"] += 1
     return {
         "open_flags_total": open_total,

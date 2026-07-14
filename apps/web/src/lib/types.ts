@@ -82,7 +82,8 @@ export interface CheckResult {
   evidence_quote: string;
   location: string;
   reason: string;
-  confidence: number;
+  // measured checker accuracy for this rule (GT v2); null = not yet measured
+  accuracy_measured: { accuracy: number; source: string } | null;
 }
 
 export interface Flag {

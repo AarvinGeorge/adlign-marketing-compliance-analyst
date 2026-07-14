@@ -78,6 +78,21 @@ def derive_intersection(axis_a: bool, axis_b: bool | None) -> tuple[str, bool]:
             return ("unapproved_violation", False)
 
 
+def recommended_severity(rule_severity: str, intersection_tag: str | None) -> str:
+    """Matrix-aware severity recommendation (2026-07-14, Aarvin-approved).
+    The rule's scorecard severity is the CEILING (how bad a violation of
+    this rule is); the compliance-vs-approval matrix says what actually
+    happened. drifted_but_compliant = compliant content whose wording left
+    the approved library — governance risk, not regulatory risk — so it
+    recommends Low regardless of the rule. Violations (either axis failing
+    compliance) keep the rule severity; unresolved tags (needs-review
+    all_good / na) keep the rule severity as the unresolved worst case.
+    Human override still wins everywhere: effective = override ?? this."""
+    if intersection_tag == "drifted_but_compliant":
+        return "Low"
+    return rule_severity
+
+
 def validate_transition(current: str, target: str) -> None:
     allowed = ALLOWED_TRANSITIONS.get(current)
     if allowed is None or target not in ALLOWED_TRANSITIONS:

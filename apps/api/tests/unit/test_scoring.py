@@ -163,3 +163,51 @@ def test_fresh_within_ttl():
 def test_stale_beyond_ttl():
     fetched = datetime.now(UTC) - timedelta(hours=25)
     assert is_fresh(fetched, ttl_hours=24) is False
+
+
+# --- matrix-aware recommended severity (2026-07-14: risk follows the
+#     compliance-vs-approval matrix, not the rule alone; Aarvin-approved) -----
+
+def test_drift_recommends_low_regardless_of_rule_severity():
+    from shiboleth.services.scoring.formulas import recommended_severity
+
+    assert recommended_severity("High", "drifted_but_compliant") == "Low"
+    assert recommended_severity("Medium", "drifted_but_compliant") == "Low"
+    assert recommended_severity("Low", "drifted_but_compliant") == "Low"
+
+
+def test_violations_keep_rule_severity():
+    from shiboleth.services.scoring.formulas import recommended_severity
+
+    for tag in ("unapproved_violation", "approved_but_non_compliant"):
+        assert recommended_severity("High", tag) == "High"
+        assert recommended_severity("Medium", tag) == "Medium"
+
+
+def test_unresolved_tags_keep_rule_severity_worst_case():
+    # needs-review flags can carry all_good or an unknown/na tag; the
+    # unresolved worst case is the rule severity, never an upgrade
+    from shiboleth.services.scoring.formulas import recommended_severity
+
+    assert recommended_severity("High", "all_good") == "High"
+    assert recommended_severity("Medium", "na") == "Medium"
+
+
+# --- measured-accuracy calibration (GT v2 certification, e5v2-final) ---------
+
+def test_measured_accuracy_known_rules():
+    from shiboleth.services.scoring.calibration import measured_accuracy
+
+    a1 = measured_accuracy("R-01-REQ")
+    a3 = measured_accuracy("R-03-REQ")
+    assert a1 is not None and a3 is not None
+    assert 0.0 < a3["accuracy"] < a1["accuracy"] <= 1.0
+    assert a1["source"]  # provenance string is part of the disclosure
+
+
+def test_measured_accuracy_unknown_rule_is_honest_none():
+    # custom rules added via the Customize layer have no certification yet:
+    # the API must say "not measured", never borrow another rule's number
+    from shiboleth.services.scoring.calibration import measured_accuracy
+
+    assert measured_accuracy("CUSTOM-ab12-REQ") is None

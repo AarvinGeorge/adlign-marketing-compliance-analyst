@@ -29,8 +29,9 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 async def client_with_flags(seeded_session):  # noqa: F811
     """Latest run with 2 open flags: R-01-REQ (rule severity High, UV) and
-    R-03-REQ (rule severity Medium, drift). Baseline severity partition
-    {High: 1, Medium: 1, Low: 0}."""
+    R-03-REQ (rule severity Medium, drift). Matrix-aware recommendation
+    (2026-07-14): drift recommends Low, so the baseline partition is
+    {High: 1, Medium: 0, Low: 1}."""
     now = datetime.now(UTC)
     mat = Material(property_id="tt-website", ref="https://x/", kind="page",
                    content_hash="hsev1", extracted_text="body", fetched_at=now)
@@ -135,7 +136,7 @@ async def test_metrics_partition_respects_override(client_with_flags):
     client, _session, f_high, _f_med = client_with_flags
     metrics = (await client.get("/metrics")).json()
     assert metrics["open_violations_by_severity"] == {
-        "High": 1, "Medium": 1, "Low": 0,
+        "High": 1, "Medium": 0, "Low": 1,
     }
 
     # flip the High flag to Low: the partition shifts by exactly one and
@@ -145,7 +146,7 @@ async def test_metrics_partition_respects_override(client_with_flags):
     assert r.status_code == 200, r.text
     metrics = (await client.get("/metrics")).json()
     assert metrics["open_violations_by_severity"] == {
-        "High": 0, "Medium": 1, "Low": 1,
+        "High": 0, "Medium": 0, "Low": 2,
     }
     assert metrics["open_violations"] == 2
     assert metrics["open_violations_high"] == 0
@@ -154,8 +155,43 @@ async def test_metrics_partition_respects_override(client_with_flags):
     await client.patch(f"/flags/{f_high.id}/severity", json={"severity": None})
     metrics = (await client.get("/metrics")).json()
     assert metrics["open_violations_by_severity"] == {
-        "High": 1, "Medium": 1, "Low": 0,
+        "High": 1, "Medium": 0, "Low": 1,
     }
+
+
+async def test_matrix_aware_recommendation_and_reset(client_with_flags):
+    """Drift on a Medium rule recommends Low (matrix-aware, 2026-07-14);
+    override and null-reset land back on the MATRIX value, not the rule's."""
+    client, _session, _f_high, f_med = client_with_flags
+    detail = (await client.get("/products/turbotax-free")).json()
+    row = _payload_flag(detail, f_med.id)
+    assert row["severity_recommended"] == "Low"
+    assert row["severity_effective"] == "Low"
+
+    r = await client.patch(f"/flags/{f_med.id}/severity",
+                           json={"severity": "High"})
+    assert r.status_code == 200, r.text
+    assert r.json()["severity_effective"] == "High"
+    assert r.json()["severity_recommended"] == "Low"
+
+    r = await client.patch(f"/flags/{f_med.id}/severity",
+                           json={"severity": None})
+    assert r.json()["severity_effective"] == "Low"
+
+
+async def test_flag_payload_discloses_measured_accuracy_not_confidence(
+        client_with_flags):
+    """The self-reported LLM confidence is uncalibrated (trace analysis
+    2026-07-14: flags cluster at 0.95 while measured accuracy is 65-81%);
+    the payload now carries the GT v2 measured accuracy instead."""
+    client, _session, f_high, _f_med = client_with_flags
+    detail = (await client.get("/products/turbotax-free")).json()
+    row = _payload_flag(detail, f_high.id)
+    assert "confidence" not in row["verdicts"]
+    acc = row["verdicts"]["accuracy_measured"]
+    assert acc is not None
+    assert 0.0 < acc["accuracy"] <= 1.0
+    assert acc["source"]
 
 
 async def test_outcome_rows_never_rewritten_by_override(client_with_flags):

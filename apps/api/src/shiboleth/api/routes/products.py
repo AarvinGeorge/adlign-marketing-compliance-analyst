@@ -95,14 +95,18 @@ async def product_detail(product_id: str, request: Request) -> dict:
             # additive (metrics overhaul 2026-07-13): verdict_status lets the
             # UI apply ONE violation definition everywhere (needs_review is
             # not a violation; it is its own donut slice). Per-flag severity
-            # (2026-07-14): effective = human override ?? rule severity.
+            # (2026-07-14): effective = human override ?? matrix-aware
+            # recommendation (rule severity, capped by the intersection tag).
             from shiboleth.api.routes.metrics import (needs_review_flag_ids,
                                                       rule_severity_by_check)
+            from shiboleth.services.scoring.calibration import measured_accuracy
+            from shiboleth.services.scoring.formulas import recommended_severity
 
             review_ids = needs_review_flag_ids(latest)
             rule_sev = await rule_severity_by_check(session)
             for f in rows:
-                recommended = rule_sev.get(f.check_id, "Medium")
+                recommended = recommended_severity(
+                    rule_sev.get(f.check_id, "Medium"), f.intersection_tag)
                 flags.append({
                     "id": f.id, "state": f.state, "assigned_team": f.assigned_team,
                     "note": f.note, "cluster_id": f.cluster_id,
@@ -119,7 +123,13 @@ async def product_detail(product_id: str, request: Request) -> dict:
                         "check_id": f.check_id, "axis_a": f.axis_a,
                         "axis_b": f.axis_b, "intersection_tag": f.intersection_tag,
                         "evidence_quote": f.evidence_quote, "reason": f.reason,
-                        "confidence": f.confidence,
+                        # self-reported LLM confidence dropped from the
+                        # payload (2026-07-14): trace analysis proved it
+                        # uncalibrated (flags stereotype at 0.95; the worst
+                        # rule self-reports highest). The honest number is
+                        # the GT v2 measured accuracy; None = not yet
+                        # measured (custom rules) and MUST render as such.
+                        "accuracy_measured": measured_accuracy(f.check_id),
                     },
                 })
         scores = latest.scores if latest else None

@@ -147,22 +147,25 @@ async def test_open_violations_by_severity_partitions(known_state):
     metrics = (await client.get("/metrics")).json()
     by_severity = metrics["open_violations_by_severity"]
     # independent SQL: open non-review flags on the latest run, mapped
-    # through the same rule->severity table the API uses
+    # through the rule->severity table and the matrix-aware cap
+    # (2026-07-14: drifted_but_compliant recommends Low)
     severity_by_rule = {"R-01": "High", "R-02": "High",
                         "R-03": "Medium", "R-04": "Medium"}
     review_ids = {row["flag_id"] for row in run.scores["outcome_rows"]
                   if row["verdict_status"] == "needs_review"}
     rows = (await session.execute(
-        select(Flag.id, Flag.check_id).where(
+        select(Flag.id, Flag.check_id, Flag.intersection_tag).where(
             Flag.run_id == run.id, Flag.state == "open"
         )
     )).all()
     expected = {"High": 0, "Medium": 0, "Low": 0}
-    for fid, check_id in rows:
+    for fid, check_id, tag in rows:
         if fid in review_ids:
             continue
-        expected[severity_by_rule.get(check_id.rsplit("-", 1)[0], "Medium")] += 1
-    assert by_severity == expected == {"High": 1, "Medium": 1, "Low": 0}
+        sev = ("Low" if tag == "drifted_but_compliant"
+               else severity_by_rule.get(check_id.rsplit("-", 1)[0], "Medium"))
+        expected[sev] += 1
+    assert by_severity == expected == {"High": 1, "Medium": 0, "Low": 1}
     # the severity partition sums to the tile number
     assert sum(by_severity.values()) == metrics["open_violations"]
     assert by_severity["High"] == metrics["open_violations_high"]
