@@ -228,19 +228,33 @@ If all boxes tick: **you are live.**
 Deploys are automated; manual rsync (Part 5) is only for first-time setup
 or emergencies.
 
-**How updates ship now: `git push` to `main` does everything.**
+**How updates ship now: `git push` to `main` does everything.** The repo's
+main branch is the source of truth for code AND configuration (pattern A,
+Aarvin's call 2026-07-14): every deploy re-renders the server's `.env` from
+GitHub Actions secrets plus the non-secret config block at the top of the
+workflow file. Nothing on the server or a laptop drives production.
 
 ```
 git push origin main
-   ├─▶ GitHub Actions "deploy-backend": rsync to the VPS, rebuild the
-   │   Docker stack, smoke-check /api/health (DB volume + .env untouched)
+   ├─▶ GitHub Actions "deploy-backend": rsync code to the VPS, render
+   │   /opt/shiboleth/code/.env from GitHub secrets, rebuild the Docker
+   │   stack, smoke-check /api/health (DB volume untouched)
    └─▶ Vercel git integration: builds apps/web, deploys the frontend
 ```
 
 - Backend workflow: `.github/workflows/deploy-backend.yml`. Watch runs with
   `gh run list --workflow deploy-backend` or the repo's Actions tab.
-- Repo secrets it uses: `VPS_HOST`, `VPS_SSH_KEY` (dedicated CI key; its
-  public half is in the VPS `authorized_keys`), `VPS_KNOWN_HOSTS`.
+- Repo secrets: `VPS_HOST`, `VPS_SSH_KEY` (dedicated CI key; its public
+  half is in the VPS `authorized_keys`), `VPS_KNOWN_HOSTS`, plus the real
+  secrets the .env render uses: `POSTGRES_PASSWORD`, `GOOGLE_API_KEY`,
+  `GROQ_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
+  `LANGSMITH_API_KEY`. Rotate a key = update the GitHub secret, rerun the
+  workflow (Actions tab -> deploy-backend -> Run workflow, or push).
+- Non-secret config (DOMAIN, caps, PROTECTED_RUN_IDS, CORS_ALLOW_ORIGINS)
+  lives in the workflow's `env:` block — edit in git, never on the server.
+- CAUTION: `POSTGRES_PASSWORD` in GitHub must stay equal to the password
+  the pgdata volume was initialized with, or the api loses the DB. To
+  change it, change it in Postgres first, then in the GitHub secret.
 - Frontend: Vercel project (scope `aarvingeorges-projects`), root directory
   `apps/web`, env `NEXT_PUBLIC_API_URL=https://217.15.168.253.sslip.io/api`.
   The browser calls the VPS API cross-origin; the API allows it via

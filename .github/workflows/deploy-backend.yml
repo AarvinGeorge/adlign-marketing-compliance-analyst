@@ -1,9 +1,14 @@
-# meta: CI/CD for the VPS backend (deploy plan 2026-07-14). Every push to
-# main rsyncs the repo to /opt/shiboleth/code on the Hostinger VPS and
-# rebuilds the prod stack (Caddy + web + api + postgres; pgdata volume and
-# server .env untouched). The Vercel frontend deploys separately via
-# Vercel's git integration. Secrets: VPS_HOST, VPS_SSH_KEY (dedicated CI
-# key, private half), VPS_KNOWN_HOSTS (ssh-keyscan output).
+# meta: CI/CD for the VPS backend (deploy plan 2026-07-14, pattern A per
+# Aarvin: the repo's main branch is the source of truth for EVERYTHING —
+# code AND the server .env, which this workflow renders from GitHub
+# Actions secrets on every deploy; nothing on the server or a laptop
+# drives production). Push to main -> rsync code to /opt/shiboleth/code ->
+# render .env -> rebuild the prod stack (pgdata volume untouched) ->
+# health smoke. The Vercel frontend deploys separately via Vercel's git
+# integration. Secrets: VPS_HOST, VPS_SSH_KEY, VPS_KNOWN_HOSTS,
+# POSTGRES_PASSWORD, GOOGLE_API_KEY, GROQ_API_KEY, OPENAI_API_KEY,
+# ANTHROPIC_API_KEY, LANGSMITH_API_KEY. Non-secret config lives in the
+# env block below — edit it here, in git, never on the server.
 
 name: deploy-backend
 
@@ -14,6 +19,17 @@ on:
 concurrency:
   group: deploy-backend
   cancel-in-progress: false
+
+env:
+  # --- non-secret production config (source of truth: this file) ---
+  DOMAIN: 217.15.168.253.sslip.io
+  LANGSMITH_TRACING: "true"
+  LANGSMITH_PROJECT: shiboleth-marketing-compliance-analyst-project
+  PAGE_CAP_MAX: "8"
+  CHECKS_RATE_LIMIT_PER_HOUR: "3"
+  PROTECTED_RUN_IDS: 559e0b158e41480eaa303af9cdc0d550,e9fc612df3d54fd6b035122dd7e7687c,05a9dd009201430ea56ce9f3f21aa0b1,3c09c654b7324415a3af90f7e581718a,13042afce80644d295e14ea559a3b75c
+  # Vercel frontend origin(s) allowed to call the API cross-origin
+  CORS_ALLOW_ORIGINS: ""
 
 jobs:
   deploy:
@@ -35,6 +51,24 @@ jobs:
             --exclude .env \
             --exclude apps/api/src/shiboleth/evals/.cache \
             ./ root@${{ secrets.VPS_HOST }}:/opt/shiboleth/code/
+
+      - name: Render server .env from GitHub secrets + config
+        run: |
+          ssh root@${{ secrets.VPS_HOST }} 'umask 077 && cat > /opt/shiboleth/code/.env' <<EOF
+          DOMAIN=$DOMAIN
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          LANGSMITH_TRACING=$LANGSMITH_TRACING
+          LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}
+          LANGSMITH_PROJECT=$LANGSMITH_PROJECT
+          PAGE_CAP_MAX=$PAGE_CAP_MAX
+          CHECKS_RATE_LIMIT_PER_HOUR=$CHECKS_RATE_LIMIT_PER_HOUR
+          PROTECTED_RUN_IDS=$PROTECTED_RUN_IDS
+          CORS_ALLOW_ORIGINS=$CORS_ALLOW_ORIGINS
+          EOF
 
       - name: Rebuild and restart the stack
         run: |
