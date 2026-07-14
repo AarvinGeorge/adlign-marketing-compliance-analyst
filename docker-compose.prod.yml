@@ -1,0 +1,71 @@
+# meta: production stack for the Shiboleth demo (deploy plan 2026-07-13).
+# Caddy (80/443, auto-HTTPS) -> web (Next standalone) + api (FastAPI) ->
+# postgres (pgvector, docker-network only, NEVER port-published). First boot
+# on an empty pgdata volume loads deploy/seed/*.sql.gz (the certified demo
+# data). Interpolation + api env_file both read code/.env — one env file on
+# the server. Usage: docker compose -f docker-compose.prod.yml up -d --build
+#
+# Optional mounts (present in dev, rsynced to the VPS if corpus re-runs are
+# wanted): ../ground-truth (frozen snapshots) and the LLM response cache dir
+# (also gives $0 repeat checks + cache persistence across rebuilds).
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shiboleth
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: shiboleth
+    volumes:
+      - shiboleth_pgdata_prod:/var/lib/postgresql/data
+      - ./deploy/seed:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shiboleth -d shiboleth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: apps/api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://shiboleth:${POSTGRES_PASSWORD}@postgres:5432/shiboleth
+    volumes:
+      - ../ground-truth:/app/ground-truth:ro
+      - ./apps/api/src/shiboleth/evals/.cache:/app/code/apps/api/src/shiboleth/evals/.cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: apps/web
+      args:
+        NEXT_PUBLIC_API_URL: /api
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+volumes:
+  shiboleth_pgdata_prod:
+  caddy_data:
+  caddy_config:

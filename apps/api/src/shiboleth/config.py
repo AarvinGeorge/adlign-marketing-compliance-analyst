@@ -147,6 +147,25 @@ class Settings:
         env_var, default = MODEL_STAGES[stage]  # KeyError on unknown stage: intended
         return self._get(env_var) or default
 
+    # --- public-demo hardening (deployment plan 2026-07-13) -----------------
+
+    @property
+    def page_cap_max(self) -> int:
+        """Server-side ceiling on the live-run page cap; the request body can
+        only lower it. Default matches the dev request default."""
+        return int(self._get("PAGE_CAP_MAX") or 20)
+
+    @property
+    def checks_rate_limit_per_hour(self) -> int:
+        """POST /checks per-IP hourly limit; 0 disables (dev default)."""
+        return int(self._get("CHECKS_RATE_LIMIT_PER_HOUR") or 0)
+
+    @property
+    def protected_run_ids(self) -> frozenset[str]:
+        """Runs that DELETE /runs must refuse (the seeded showcase data)."""
+        raw = self._get("PROTECTED_RUN_IDS") or ""
+        return frozenset(part.strip() for part in raw.split(",") if part.strip())
+
 
 def load_settings() -> Settings:
     """Startup path: load, verify, echo (masked). The only entry point main.py uses."""

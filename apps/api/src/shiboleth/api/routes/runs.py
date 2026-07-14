@@ -8,8 +8,11 @@ meta:
             synchronously reuse the E3 cache, so they are fast and $0 after
             certification). SSE replays persisted events then polls for new
             rows until run_finished (DB-as-checkpoint: works across process
-            restarts, matching the 07 §2 pause/resume doctrine).
-  deps: db models, corpus_run, sse-starlette.
+            restarts, matching the 07 §2 pause/resume doctrine). Demo
+            hardening (2026-07-13): POST /checks is per-IP rate limited
+            (CHECKS_RATE_LIMIT_PER_HOUR, 429), the live page cap is clamped
+            to PAGE_CAP_MAX, and DELETE /runs refuses PROTECTED_RUN_IDS (403).
+  deps: db models, corpus_run, sse-starlette, shiboleth.api.hardening.
 """
 
 from __future__ import annotations
@@ -17,14 +20,28 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
+from shiboleth.api.hardening import RateLimiter, client_key, effective_page_cap
 from shiboleth.db.models import Event, Run
 
 router = APIRouter()
+
+
+def _rate_limiter(app) -> RateLimiter:
+    """One limiter per app instance, built lazily from settings (demo
+    hardening; limit 0 in dev keeps it a no-op)."""
+    limiter = getattr(app.state, "checks_rate_limiter", None)
+    if limiter is None:
+        limiter = RateLimiter(
+            limit=app.state.settings.checks_rate_limit_per_hour,
+            window_seconds=3600,
+        )
+        app.state.checks_rate_limiter = limiter
+    return limiter
 
 
 class CheckRequest(BaseModel):
@@ -72,6 +89,11 @@ async def start_check(body: CheckRequest, request: Request) -> dict:
     finished). The caller gets {run_id, status: started} immediately and
     watches progress via the run events."""
     app = request.app
+    if not _rate_limiter(app).allow(client_key(request)):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limited: too many check runs from this address; "
+                   "try again in an hour.")
     invoke, labeler = _pipeline_deps(app.state.settings)
 
     if body.mode == "corpus":
@@ -97,11 +119,13 @@ async def start_check(body: CheckRequest, request: Request) -> dict:
         run_id = await create_live_run(session, body.product_id)
     ranker = production_ranker(app.state.settings.model_for("discover"))
 
+    cap = effective_page_cap(body.page_cap, app.state.settings)
+
     async def live_task():
         async with app.state.session_factory() as session:
             await start_live_run(session, invoke, labeler,
                                  product_id=body.product_id, run_id=run_id,
-                                 cap=body.page_cap, ranker=ranker)
+                                 cap=cap, ranker=ranker)
         await _auto_group(app, run_id)
 
     _track(app, live_task())
@@ -125,8 +149,13 @@ async def delete_run(run_id: str, request: Request) -> dict:
     """Delete a check run and ALL its records: events, flags, clusters,
     inventory, then the run row. Shared page snapshots (materials) are
     content-addressed and shared across runs, so they survive — deleting
-    one run must never orphan another run's evidence."""
-    from fastapi import HTTPException
+    one run must never orphan another run's evidence. Runs listed in
+    PROTECTED_RUN_IDS (the seeded showcase data on the public demo) are
+    refused before any DB work."""
+    if run_id in request.app.state.settings.protected_run_ids:
+        raise HTTPException(
+            status_code=403,
+            detail=f"run {run_id} is protected demo data and cannot be deleted")
     from sqlalchemy import delete as sql_delete
 
     from shiboleth.db.models import Cluster, Event, Flag, Run, RunInventory
