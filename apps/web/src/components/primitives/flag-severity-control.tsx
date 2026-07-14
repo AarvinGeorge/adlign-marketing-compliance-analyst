@@ -82,7 +82,11 @@ export function FlagSeverityControl({
           </span>
         ) : null}
       </SelectTrigger>
-      <SelectContent>
+      {/* position="popper" (floating-ui, viewport-relative): the wrapper's
+          "item-aligned" default positions the menu at document coordinates in
+          this scrolled layout, rendering it thousands of px off-screen, so
+          mouse users saw nothing open (2026-07-13 fix). */}
+      <SelectContent position="popper" align="start" sideOffset={4}>
         {(Object.keys(RAMP) as Severity[]).map((s) => (
           <SelectItem key={s} value={s} className="text-xs">
             <span
