@@ -78,7 +78,10 @@ export default function DashboardPage() {
 
       {metrics ? (
         <div className="mb-7 grid grid-cols-[1.7fr_1fr] items-stretch gap-3">
-          <OpenFlagsDonut metrics={metrics} />
+          <OpenFlagsDonut
+            total={metrics.open_flags_total}
+            byTag={metrics.open_flags_by_tag}
+          />
           <MetricCard
             label="Open violations"
             intent="Open flags with a violation verdict across all products"

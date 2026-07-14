@@ -51,7 +51,6 @@ import {
   rules,
   type ClusterFixture,
   type FlagMeta,
-  type MetricFixture,
   type ParkedProperty,
   type ProductSummary,
 } from "@/lib/fixtures";
@@ -350,9 +349,28 @@ export interface ClusterView extends ClusterFixture {
   members: ClusterView[];
 }
 
+/** Product-scoped hero numbers (same model as the dashboard donut + tile):
+ *  computed CLIENT-SIDE from the latest run's flags with the lifecycle
+ *  overlay, so they always equal the cluster/flag lists below them. Same
+ *  definitions as GET /metrics: needs_review (verdict_status) is its own
+ *  slice and never a violation; reviewed = dispositioned flags. */
+export interface ProductHero {
+  openTotal: number;
+  byTag: {
+    unapproved_violation: number;
+    drifted_but_compliant: number;
+    needs_review: number;
+    other: number;
+  };
+  openViolations: number;
+  openViolationsHigh: number;
+  reviewed: number;
+  totalFlags: number;
+}
+
 export interface ProductView {
   summary: ProductSummary | undefined;
-  metrics: MetricFixture[];
+  hero: ProductHero | undefined;
   /** Issue tree: AI-grouped parents first, unparented flat below (By issue).
    *  The retired By cluster view's flat list is gone; wording clusters are
    *  fully visible here (nested when grouped, flat otherwise). */
@@ -400,7 +418,7 @@ export function useProductView(productId: string): ProductView {
     }
     return {
       summary: undefined,
-      metrics: [],
+      hero: undefined,
       issueClusters: [],
       wordingClusterCount: 0,
       hasIssueRows: false,
@@ -418,7 +436,7 @@ function buildProductView(
 ): Pick<
   ProductView,
   | "summary"
-  | "metrics"
+  | "hero"
   | "issueClusters"
   | "wordingClusterCount"
   | "hasIssueRows"
@@ -555,7 +573,7 @@ function buildProductView(
 
   return {
     summary,
-    metrics: buildMetrics(detail, lifecycles),
+    hero: buildHero(detail, lifecycles),
     issueClusters,
     wordingClusterCount,
     hasIssueRows,
@@ -657,67 +675,53 @@ function toFlagView(f: ApiFlag, property: Property, model: string): FlagView {
   return { flag, material, property, cluster, rule, check, meta };
 }
 
-function buildMetrics(
+/** Product hero (metrics overhaul brought to U6, 2026-07-13): the same
+ *  donut + tile model as the dashboard, scoped to this product's latest run
+ *  and computed from the SAME flags the lists below render (lifecycle
+ *  overlay included), so the numbers can never drift apart. */
+function buildHero(
   detail: ApiProductDetail,
   lifecycles: Record<string, FlagLifecycle>
-): MetricFixture[] {
+): ProductHero {
   const stateOf = (f: ApiFlag): FlagState =>
     (lifecycles[f.id]?.state ?? f.state) as FlagState;
   const flags = detail.flags;
   const open = flags.filter((f) => stateOf(f) === "open");
-  // ONE violation definition everywhere (metrics overhaul 2026-07-13): an
-  // open flag with a violation verdict; needs_review is not a violation.
-  // Legacy payloads without verdict_status count as violations.
-  const openViolations = open.filter(
-    (f) => (f.verdict_status ?? "flag") === "flag"
-  );
-  const highOpen = openViolations.filter(
-    (f) => severityOf(f.verdicts.check_id) === "High"
-  ).length;
-  const dispositioned = flags.length - open.length;
-  const draft = detail.scores?.draft;
-  const verified = detail.scores?.verified;
-  const needsReview = detail.scores?.needs_review_count ?? 0;
-
-  return [
-    {
-      id: "verified-score",
-      label: "Verified score",
-      intent: "Are we getting safer or riskier overall?",
-      value:
-        verified === null || verified === undefined ? "" : String(verified),
-      sublabel: [
-        {
-          text: `draft ${draft ?? "-"} · ${dispositioned} of ${flags.length} dispositioned`,
-        },
-      ],
-    },
-    {
-      id: "open-violations",
-      label: "Open violations",
-      intent: "What is exposed right now and how long has it festered?",
-      value: String(openViolations.length),
-      sublabel: [
-        { text: `${highOpen} high`, tone: "danger" },
-        { text: " · latest run" },
-      ],
-    },
-    {
-      id: "awaiting-triage",
-      label: "Awaiting triage",
-      intent: "Is the review queue under control?",
-      value: String(open.length),
-      sublabel: [{ text: `of ${flags.length} flags` }],
-    },
-    {
-      id: "needs-review",
-      label: "Needs review",
-      intent:
-        "How much did the checker decline to decide? Excluded from the score.",
-      value: String(needsReview),
-      sublabel: [{ text: "excluded from the denominator" }],
-    },
-  ];
+  const byTag = {
+    unapproved_violation: 0,
+    drifted_but_compliant: 0,
+    needs_review: 0,
+    other: 0,
+  };
+  let openViolations = 0;
+  let openViolationsHigh = 0;
+  for (const f of open) {
+    // ONE violation definition everywhere: needs_review (verdict_status)
+    // is its own slice and never a violation; legacy payloads without the
+    // field count as violations.
+    if ((f.verdict_status ?? "flag") === "needs_review") {
+      byTag.needs_review += 1;
+      continue;
+    }
+    const tag = f.verdicts.intersection_tag;
+    if (tag === "unapproved_violation" || tag === "drifted_but_compliant") {
+      byTag[tag] += 1;
+    } else {
+      byTag.other += 1;
+    }
+    openViolations += 1;
+    if (severityOf(f.verdicts.check_id) === "High") {
+      openViolationsHigh += 1;
+    }
+  }
+  return {
+    openTotal: open.length,
+    byTag,
+    openViolations,
+    openViolationsHigh,
+    reviewed: flags.length - open.length,
+    totalFlags: flags.length,
+  };
 }
 
 export function useFlagView(

@@ -1,5 +1,9 @@
 // meta: U6 product detail (/products/[id]). API-backed via useProductView:
-// metric row computed from live scores + lifecycle overlay, flags list with
+// hero = the reusable open-flags donut + Open violations tile scoped to this
+// product's latest run (client-computed from the same flags the lists below
+// render, lifecycle overlay included, so the numbers can never diverge; the
+// tile carries the "N of M flags reviewed" progress line). The old Verified
+// score / Awaiting triage / Needs review tiles are retired. Flags list with
 // TWO groupings toggleable (by issue / by property; By cluster retired: the
 // wording clusters are fully visible inside By issue, nested when grouped,
 // flat when unparented). Grouping is a VIEW, not a decision (Gmail-threading
@@ -23,7 +27,7 @@ import { Check, Loader2, RefreshCw, Sparkles, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/primitives/metric-card";
-import { Sparkline } from "@/components/primitives/sparkline";
+import { OpenFlagsDonut } from "@/components/primitives/open-flags-donut";
 import { FlagRow } from "@/components/primitives/flag-row";
 import { IntersectionPill } from "@/components/primitives/verdict-tags";
 import { LifecycleChip } from "@/components/primitives/lifecycle-chip";
@@ -65,7 +69,7 @@ export default function ProductDetailPage({
   const { id } = use(params);
   const {
     summary,
-    metrics,
+    hero,
     issueClusters,
     wordingClusterCount,
     hasIssueRows,
@@ -144,22 +148,20 @@ export default function ProductDetailPage({
         </Button>
       </div>
 
-      {metrics.length > 0 ? (
-        <div className="mb-6 grid grid-cols-4 gap-3">
-          {metrics.map((m) => (
-            <MetricCard
-              key={m.id}
-              label={m.label}
-              intent={m.intent}
-              value={m.value}
-              sublabel={m.sublabel}
-              sparkline={
-                m.sparkline ? (
-                  <Sparkline data={m.sparkline} kind={m.sparklineKind} />
-                ) : undefined
-              }
-            />
-          ))}
+      {hero && hero.totalFlags > 0 ? (
+        <div className="mb-6 grid grid-cols-[1.7fr_1fr] items-stretch gap-3">
+          <OpenFlagsDonut total={hero.openTotal} byTag={hero.byTag} />
+          <MetricCard
+            label="Open violations"
+            intent="Open flags with a violation verdict on this product's latest run"
+            value={String(hero.openViolations)}
+            sublabel={[
+              { text: `${hero.openViolationsHigh} high`, tone: "danger" },
+              {
+                text: ` · ${hero.reviewed} of ${hero.totalFlags} flags reviewed`,
+              },
+            ]}
+          />
         </div>
       ) : null}
 

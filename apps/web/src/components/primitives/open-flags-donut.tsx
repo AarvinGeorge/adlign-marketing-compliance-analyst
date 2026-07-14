@@ -1,7 +1,9 @@
-// meta: OpenFlagsDonut (dashboard hero, metrics overhaul 2026-07-13). Thin
-// donut of ALL open flags across the portfolio, sliced by intersection tag
-// in a FIXED order (unapproved_violation, drifted_but_compliant,
-// needs_review, then a muted Other only when nonzero). Validated palette
+// meta: OpenFlagsDonut (metrics overhaul 2026-07-13). REUSABLE hero donut:
+// the dashboard passes the portfolio-wide GET /metrics numbers, the product
+// page passes its client-computed latest-run numbers. Thin donut of open
+// flags sliced by intersection tag in a FIXED order (unapproved_violation,
+// drifted_but_compliant, needs_review, then a muted Other only when
+// nonzero). Validated palette
 // (binding, dataviz skill): #dc2626 / #d97706 / #5b74c2; 2px white gaps.
 // Interaction (2026-07-13, Aarvin: floating tooltip felt janky): NO floating
 // tooltip — the CENTER is the readout. Hovering a slice or its legend row
@@ -14,7 +16,6 @@
 import { useState } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 import { ChartContainer } from "@/components/ui/chart";
-import type { ApiMetrics } from "@/lib/api";
 
 const SLICES = [
   {
@@ -33,9 +34,16 @@ const SLICES = [
 
 type SliceKey = (typeof SLICES)[number]["key"];
 
-export function OpenFlagsDonut({ metrics }: { metrics: ApiMetrics }) {
-  const total = metrics.open_flags_total;
-  const countOf = (key: SliceKey) => metrics.open_flags_by_tag[key] ?? 0;
+export function OpenFlagsDonut({
+  total,
+  byTag,
+  centerLabel = "open flags",
+}: {
+  total: number;
+  byTag: Partial<Record<string, number>>;
+  centerLabel?: string;
+}) {
+  const countOf = (key: SliceKey) => byTag[key] ?? 0;
   const data = SLICES.map((s) => ({
     key: s.key,
     label: s.label,
@@ -108,7 +116,7 @@ export function OpenFlagsDonut({ metrics }: { metrics: ApiMetrics }) {
                 {activeSlice.value}
               </span>
               <span className="text-[11px] leading-tight text-muted-foreground">
-                {pct}% of open flags
+                {pct}% of {centerLabel}
               </span>
             </>
           ) : (
@@ -117,7 +125,7 @@ export function OpenFlagsDonut({ metrics }: { metrics: ApiMetrics }) {
                 {total}
               </span>
               <span className="text-[11px] text-muted-foreground">
-                open flags
+                {centerLabel}
               </span>
             </>
           )}
