@@ -260,22 +260,37 @@ Aarvin's call 2026-07-14): every deploy re-renders the server's `.env` from
 GitHub Actions secrets plus the non-secret config block at the top of the
 workflow file. Nothing on the server or a laptop drives production.
 
+`main` is protected: changes land through a pull request, and the
+`verify-api` + `verify-web` checks must be green before it can merge.
+
 ```
-git push origin main
-   ├─▶ GitHub Actions "deploy-backend": rsync code to the VPS, render
-   │   /opt/adlign/code/.env from GitHub secrets, rebuild the Docker
-   │   stack, smoke-check /api/health (DB volume untouched)
-   └─▶ Vercel git integration: builds apps/web, deploys the frontend
+open a PR
+   ├─▶ verify-api : pytest + ruff  ┐ both must pass
+   ├─▶ verify-web : eslint, tsc, next build  ┘
+   └─▶ Vercel preview deployment for the branch
+
+merge to main
+   ├─▶ verify-api + verify-web run again
+   └─▶ deploy (needs both):
+         ├─▶ rsync code to the VPS, render /opt/adlign/code/.env from
+         │   GitHub secrets, rebuild the Docker stack (DB volume
+         │   untouched), smoke-check health + real data + the web lane
+         └─▶ Vercel builds apps/web and deploys the frontend
 ```
 
-- Backend workflow: `.github/workflows/deploy-backend.yml`. Watch runs with
-  `gh run list --workflow deploy-backend` or the repo's Actions tab.
+- Workflow: `.github/workflows/ci-cd.yml` (was `deploy-backend.yml` until
+  2026-07-23, when the test gate was added). Watch runs with
+  `gh run list --workflow ci-cd` or the repo's Actions tab.
+- Emergency bypass: branch protection does NOT enforce for admins, so the
+  repo owner can push directly to `main` if CI itself is broken. That is an
+  escape hatch, not the routine path. Set `enforce_admins: true` on the
+  branch protection to close it.
 - Repo secrets: `VPS_HOST`, `VPS_SSH_KEY` (dedicated CI key; its public
   half is in the VPS `authorized_keys`), `VPS_KNOWN_HOSTS`, plus the real
   secrets the .env render uses: `POSTGRES_PASSWORD`, `GOOGLE_API_KEY`,
   `GROQ_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
-  `LANGSMITH_API_KEY`. Rotate a key = update the GitHub secret, rerun the
-  workflow (Actions tab -> deploy-backend -> Run workflow, or push).
+  `LANGSMITH_API_KEY`. Rotate a key = update the GitHub secret, then push
+  (or re-run the latest `ci-cd` run from the Actions tab).
 - Non-secret config (DOMAIN, caps, PROTECTED_RUN_IDS, CORS_ALLOW_ORIGINS)
   lives in the workflow's `env:` block — edit in git, never on the server.
 - CAUTION: `POSTGRES_PASSWORD` in GitHub must stay equal to the password
