@@ -31,7 +31,7 @@ export function AppSidebar() {
         <span className="flex size-[26px] flex-none items-center justify-center rounded-[7px] bg-primary text-[13px] font-bold text-primary-foreground">
           A
         </span>
-        <span className="text-[15px] font-semibold tracking-tight">
+        <span className="text-[14px] font-semibold uppercase tracking-[0.07em]">
           Adlign
         </span>
       </Link>
