@@ -37,6 +37,8 @@ async def verify_run_flags(
     ).scalars().all()
     n = 0
     for f in flags:
+        if f.verifier_agrees is not None:
+            continue  # idempotent: already verified, don't re-spend
         bundle = bundles.get(rule_id_of(f.check_id))
         if bundle is None or not f.material_id:
             continue

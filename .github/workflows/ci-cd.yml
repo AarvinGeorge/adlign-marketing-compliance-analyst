@@ -35,6 +35,9 @@ env:
   LANGSMITH_PROJECT: adlign-production
   PAGE_CAP_MAX: "8"
   CHECKS_RATE_LIMIT_PER_HOUR: "3"
+  # Trust Stage 2: run the independent verifier on new checks (adds a per-flag
+  # "reviewers agree/split" signal; small paid OpenAI call per flag, cached).
+  ENABLE_VERIFIER: "true"
   PROTECTED_RUN_IDS: 559e0b158e41480eaa303af9cdc0d550,e9fc612df3d54fd6b035122dd7e7687c,05a9dd009201430ea56ce9f3f21aa0b1,3c09c654b7324415a3af90f7e581718a,13042afce80644d295e14ea559a3b75c
   # Vercel frontend origin(s) allowed to call the API cross-origin.
   # Trimmed to the single live origin 2026-07-23 after the Adlign rename was
@@ -186,6 +189,7 @@ jobs:
           LANGSMITH_PROJECT=$LANGSMITH_PROJECT
           PAGE_CAP_MAX=$PAGE_CAP_MAX
           CHECKS_RATE_LIMIT_PER_HOUR=$CHECKS_RATE_LIMIT_PER_HOUR
+          ENABLE_VERIFIER=$ENABLE_VERIFIER
           PROTECTED_RUN_IDS=$PROTECTED_RUN_IDS
           CORS_ALLOW_ORIGINS=$CORS_ALLOW_ORIGINS
           EOF
