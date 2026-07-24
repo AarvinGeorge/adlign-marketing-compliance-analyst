@@ -103,3 +103,16 @@ class TestLangSmith:
     def test_tracing_false_when_env_says_so(self):
         settings = make_settings(LANGSMITH_TRACING="false")
         assert settings.langsmith_tracing is False
+
+
+def test_verify_stage_defaults_to_openai():
+    s = make_settings()
+    assert s.model_for("verify").startswith("openai:")
+
+
+def test_enable_verifier_defaults_false():
+    assert make_settings().enable_verifier is False
+
+
+def test_enable_verifier_true_when_set():
+    assert make_settings(ENABLE_VERIFIER="true").enable_verifier is True

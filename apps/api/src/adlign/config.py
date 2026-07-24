@@ -46,6 +46,11 @@ MODEL_STAGES: dict[str, tuple[str, str]] = {
     "decompose": ("DEFAULT_MODEL_DECOMPOSE", "anthropic:claude-haiku-4-5"),
     # semantic page discovery: URL relevance ranking vs the live scorecard
     "discover": ("DEFAULT_MODEL_DISCOVER", "anthropic:claude-haiku-4-5"),
+    # trust Stage 2 verifier: an INDEPENDENT second opinion on each flag. A
+    # DIFFERENT provider (OpenAI) than the checker (Anthropic) on purpose, so
+    # agreement means something (GT v2 used Anthropic+OpenAI judges only). Exact
+    # cheap id confirmed against the OpenAI model list at wire-in; overridable.
+    "verify": ("DEFAULT_MODEL_VERIFY", "openai:gpt-5-mini"),
 }
 
 LANGSMITH_PROJECT_DEFAULT = "adlign-production"
@@ -142,6 +147,13 @@ class Settings:
     def langsmith_tracing(self) -> bool:
         raw = self._get("LANGSMITH_TRACING")
         return True if raw is None else raw.lower() in ("true", "1", "yes")
+
+    @property
+    def enable_verifier(self) -> bool:
+        """Trust Stage 2: run the independent verifier on flags. Default OFF
+        (opt-in because it makes paid cross-provider calls). On in prod demo."""
+        raw = self._get("ENABLE_VERIFIER")
+        return bool(raw) and raw.lower() in ("true", "1", "yes")
 
     def model_for(self, stage: str) -> str:
         env_var, default = MODEL_STAGES[stage]  # KeyError on unknown stage: intended
