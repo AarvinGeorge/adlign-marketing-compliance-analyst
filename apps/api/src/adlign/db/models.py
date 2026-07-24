@@ -169,6 +169,10 @@ class Flag(Base):
     # ambiguous = the checker self-flagged the verdict as ambiguous.
     evidence_valid: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     ambiguous: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # Stage 2 verifier (advisory): independent second-model agreement.
+    verifier_agrees: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    verifier_model: Mapped[str | None] = mapped_column(String, nullable=True)
+    verifier_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     cluster_id: Mapped[str | None] = mapped_column(ForeignKey("clusters.id"), nullable=True)
     state: Mapped[str] = mapped_column(String, default="open")  # lifecycle (04 §6e)
     assigned_team: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -152,4 +152,5 @@ async def test_flag_has_trust_signal_columns(seeded_session):
     names = await conn.run_sync(
         lambda sync_conn: {c["name"] for c in sa_inspect(sync_conn).get_columns("flags")}
     )
-    assert {"evidence_valid", "ambiguous"} <= names
+    assert {"evidence_valid", "ambiguous",
+            "verifier_agrees", "verifier_model", "verifier_reason"} <= names
