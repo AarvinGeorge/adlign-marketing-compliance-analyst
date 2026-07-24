@@ -64,3 +64,18 @@ async def test_verify_run_flags_resilient_on_failure(seeded_session, run_with_fl
     assert n == 0
     refreshed = await seeded_session.get(Flag, flag.id)
     assert refreshed.verifier_agrees is None
+
+
+async def test_verify_run_flags_skips_already_verified(seeded_session, run_with_flag):  # noqa: F811
+    run, flag = run_with_flag
+    # first pass verifies the flag
+    assert await verify_run_flags(seeded_session, run.id, _agree_invoke, "openai:test") == 1
+    # second pass is idempotent: the already-verified flag is skipped (0 re-verified)
+    called = {"n": 0}
+
+    def _counting_invoke(prompt):
+        called["n"] += 1
+        return _agree_invoke(prompt)
+
+    assert await verify_run_flags(seeded_session, run.id, _counting_invoke, "openai:test") == 0
+    assert called["n"] == 0  # no re-calls -> no wasted OpenAI spend
